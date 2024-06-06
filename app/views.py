@@ -6,7 +6,7 @@ from flask import g
 from flask import jsonify, send_file,  flash, session, abort
 import os
 import json
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 from werkzeug.security import generate_password_hash, check_password_hash
 from sqlalchemy.orm import joinedload
 from app.models import *
@@ -95,6 +95,12 @@ def register():
     try: 
         content = request.json
         name = content['name']
+        username = content['username']
+        dob = content['dob']
+        age = int((date.today() - dob).days / 365.2425)
+        
+        
+        
         
         
     except Exception as e:

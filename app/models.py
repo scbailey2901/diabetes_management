@@ -20,7 +20,7 @@ class Patients(db.Model):
     joined_on = db.Column(db.DateTime, default=db.func.current_timestamp())
     caregivers = db.relationship('Caregivers', secondary=patient_caregiver, backref='patients')
 
-    def __init__(self, pid, name, username, password, phonenumber, gender, joined_on):
+    def __init__(self, pid, name, username, password, phonenumber, gender, joined_on, caregiver):
         self.pid = pid
         self.name = name
         self.username = username
@@ -55,6 +55,23 @@ class Patients(db.Model):
             "joinedOn": self.joined_on
         }
 
+class HealthRecord(db.Model):
+    __tablename__ = 'healthrecord'
+    hrid= db.Column(db.Integer, primary_key=True, autoincrement=True)
+    weight = db.Column(db.Integer)
+    height = db.Column(db.Integer)
+    isSmoker = db.Column(db.Boolean, default= False)
+    isDrinker = db.Column(db.Boolean, default = False)
+    hasHighBP = db.Column(db.Boolean, default = False)
+    hasHighChol = db.Column(db.Boolean, default = False)
+    hasHeartDisease = db.Column(db.Boolean, default = False)
+    HadHeartAttack = db.Column(db.Boolean, default = False)
+    HadStroke = db.Column(db.Boolean, default = False)
+    HasTroubleWalking = db.Column(db.Boolean, default = False)
+    bloodSugarlevels = db.relationship('BloodSugarLevels', backref='healthrecord')
+    bloodPressurelevels = db.relationship('BloodPressureLevels', backref='healthrecord')
+    
+
 class Caregivers(db.Model):
     __tablename__ = 'caregivers'
     cid = db.Column(db.Integer, primary_key=True, autoincrement=True)
@@ -63,6 +80,7 @@ class Caregivers(db.Model):
     password = db.Column(db.String(200))
     phonenumber = db.Column(db.String(10))
     gender = db.Column(db.String(20))
+    consentForData = db.Column(db.Boolean, default=False)
     joined_on = db.Column(db.DateTime, default=db.func.current_timestamp())
     credentials = db.relationship('Credentials', backref='caregivers')
 
@@ -139,14 +157,17 @@ class BloodSugarLevels(db.Model):
     dateAndTimeRecorded = db.Column(db.DateTime)
     created_at = db.Column(db.DateTime, default=datetime.now)
     patient_id = db.Column(db.Integer, db.ForeignKey('patients.pid'))
+    hrid = db.Column(db.Integer, db.ForeignKey('healthrecord.hrid'))
 
-    def __init__(self, bslID, bloodSugarLevel, unit, dateAndTimeRecorded, created_at, patient_id):
+    def __init__(self, bslID, bloodSugarLevel, unit, dateAndTimeRecorded, created_at, patient_id, hrid):
         self.bslID = bslID
         self.bloodSugarLevel = bloodSugarLevel
         self.unit = unit
         self.dateAndTimeRecorded = dateAndTimeRecorded
         self.created_at = created_at
         self.patient_id = patient_id
+        self.hrid = hrid
+        
 
     def __repr__(self):
         return f"BloodSugarLevel(id={self.bslID}, bloodSugarLevel='{self.bloodSugarLevel} {self.unit}', dateAndTimeRecorded='{self.dateAndTimeRecorded}', created_at='{self.created_at}')"
@@ -158,5 +179,40 @@ class BloodSugarLevels(db.Model):
             "unit": self.unit,
             "dateAndTimeRecorded": self.dateAndTimeRecorded,
             "createdAt": self.created_at,
-            "patientId": self.patient_id
+            "patientId": self.patient_id,
+            "healthrecordid": self.hrid
+        }
+
+class BloodPressureLevels(db.Model):
+    __tablename__ = 'bloodpressurelevels'
+    bplID = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    bloodPressureLevel = db.Column(db.Integer)
+    unit = db.Column(db.String)
+    dateAndTimeRecorded = db.Column(db.DateTime)
+    created_at = db.Column(db.DateTime, default=datetime.now)
+    patient_id = db.Column(db.Integer, db.ForeignKey('patients.pid'))
+    hrid = db.Column(db.Integer, db.ForeignKey('healthrecord.hrid'))
+
+    def __init__(self, bplID, bloodPressureLevel, unit, dateAndTimeRecorded, created_at, patient_id, hrid):
+        self.bplID = bplID
+        self.bloodSugarLevel = bloodPressureLevel
+        self.unit = unit
+        self.dateAndTimeRecorded = dateAndTimeRecorded
+        self.created_at = created_at
+        self.patient_id = patient_id
+        self.hrid = hrid
+        
+
+    def __repr__(self):
+        return f"BloodSugarLevel(id={self.bslID}, bloodSugarLevel='{self.bloodSugarLevel} {self.unit}', dateAndTimeRecorded='{self.dateAndTimeRecorded}', created_at='{self.created_at}')"
+
+    def to_json(self):
+        return {
+            "bplId": self.bplID,
+            "bloodPressureLevel": self.bloodPressureLevel,
+            "unit": self.unit,
+            "dateAndTimeRecorded": self.dateAndTimeRecorded,
+            "createdAt": self.created_at,
+            "patientId": self.patient_id,
+            "healthrecordid": self.hrid
         }
