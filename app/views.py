@@ -17,6 +17,7 @@ from werkzeug.utils import secure_filename
 import re
 from app.models import Patients, Caregivers, BloodSugarLevels, Credentials
 from flask_migrate import Migrate
+import bcrypt
     
 from functools import wraps
 import jwt
@@ -94,11 +95,36 @@ def load_caregiver(id):
 def register():
     try: 
         content = request.json
+        usertype = content['usertype']
         name = content['name']
         username = content['username']
         dob = content['dob']
+        dob = datetime.strptime(dob, "%m/%d/%Y %H:%M").date()
         age = int((date.today() - dob).days / 365.2425)
+        reg = "^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*#?&])[A-Za-z\d@$!#%*?&]{6,20}$"
+        pat = re.compile(reg)                
+        mat = re.search(pat, content['password'])
+        if mat:
+            password = bcrypt.hashpw(content['password'].encode('utf-8'), bcrypt.gensalt(rounds=15)).decode('utf-8')
+        else: 
+            return make_response({'error': 'Please ensure that your password has at least one uppercase letter, one symbol, one numeral and one lowercase letter.'})
         
+        eregex = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,7}\b'
+        if(re.fullmatch(eregex, content["email"])):
+            email = content['email']
+        else: 
+            return make_response({'error': 'Please enter a valid email address.'},400)
+        
+        pregex = r"^[189][0-9]{7}$"
+        validphone = re.search(pregex, content['phonenumber'])
+        if validphone: 
+            phonenumber = content['phonenumber']
+        else: 
+            return make_response({'error': 'Please enter a valid phone number'}, 400)
+        
+        gender = content['gender']
+        caregiver = None
+        weight = int(content['weight'])
         
         
         

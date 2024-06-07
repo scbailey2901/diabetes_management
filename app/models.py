@@ -13,21 +13,26 @@ class Patients(db.Model):
     name = db.Column(db.String(200), unique=False, nullable=False)
     age = db.Column(db.Integer)
     dob = db.Column(db.DateTime)
-    username = db.Column(db.String(200), unique=True, nullable=False)
+    email = db.Column(db.String(256))
+    username = db.Column(db.String(200), unique=True)
     password = db.Column(db.String(256), nullable=False)
-    phonenumber = db.Column(db.String(10), nullable=False)
+    phonenumber = db.Column(db.String(15))
     gender = db.Column(db.String(20), nullable=False)
-    joined_on = db.Column(db.DateTime, default=db.func.current_timestamp())
+    consentForData = db.Column(db.Boolean, default = False)
+    joined_on = db.Column(db.DateTime, default=datetime.now())
     caregivers = db.relationship('Caregivers', secondary=patient_caregiver, backref='patients')
+    hrid = db.Column(db.Integer, db.ForeignKey('healthrecord.hrid'))
 
-    def __init__(self, pid, name, username, password, phonenumber, gender, joined_on, caregiver):
+    def __init__(self, pid, name, username, password, phonenumber, gender,  caregiver, hrid):
         self.pid = pid
         self.name = name
         self.username = username
         self.password = password
         self.phonenumber = phonenumber
         self.gender = gender
-        self.joined_on = joined_on
+        self.caregivers = caregiver
+        self.hrid = hrid
+        
 
     def is_authenticated(self):
         return True
@@ -52,12 +57,14 @@ class Patients(db.Model):
             "password": self.password,
             "phoneNumber": self.phonenumber,
             "gender": self.gender,
-            "joinedOn": self.joined_on
+            "joinedOn": self.joined_on,
+            "hrid": self.hrid
         }
 
 class HealthRecord(db.Model):
     __tablename__ = 'healthrecord'
     hrid= db.Column(db.Integer, primary_key=True, autoincrement=True)
+    age = db.Column(db.Integer)
     weight = db.Column(db.Integer)
     height = db.Column(db.Integer)
     isSmoker = db.Column(db.Boolean, default= False)
@@ -70,28 +77,45 @@ class HealthRecord(db.Model):
     HasTroubleWalking = db.Column(db.Boolean, default = False)
     bloodSugarlevels = db.relationship('BloodSugarLevels', backref='healthrecord')
     bloodPressurelevels = db.relationship('BloodPressureLevels', backref='healthrecord')
+    patient_id = db.Column(db.Integer, db.ForeignKey('patient.pid'))
     
-
+    def __init__(self, hrid, age, weight, height, isSmoker, isDrinker, hasHighBP, hasHighChol, hasHeartDisease, HadHeartAttack, HadStroke,HasTroubleWalking,bloodSugarlevels,bloodPressurelevels,patient_id ):
+        self.hrid =hrid
+        self.age = age
+        self.weight = weight
+        self.height = height
+        self.isSmoker = isSmoker
+        self.isDrinker = isDrinker
+        self.hasHighBP = hasHighBP
+        self.hasHighChol = hasHighChol
+        self.hasHeartDisease = hasHeartDisease
+        self.HadHeartAttack = HadHeartAttack
+        self.HadStroke = HadStroke
+        self.HasTroubleWalking = HasTroubleWalking
+        self.bloodSugarlevels = bloodSugarlevels
+        self.bloodPressurelevels = bloodPressurelevels
+        self.patient_id = patient_id
+    
 class Caregivers(db.Model):
     __tablename__ = 'caregivers'
     cid = db.Column(db.Integer, primary_key=True, autoincrement=True)
     name = db.Column(db.String(256))
     username = db.Column(db.String(200))
     password = db.Column(db.String(200))
-    phonenumber = db.Column(db.String(10))
+    phonenumber = db.Column(db.String(15))
     gender = db.Column(db.String(20))
     consentForData = db.Column(db.Boolean, default=False)
-    joined_on = db.Column(db.DateTime, default=db.func.current_timestamp())
+    joined_on = db.Column(db.DateTime, default=datetime.now())
     credentials = db.relationship('Credentials', backref='caregivers')
 
-    def __init__(self, cid, name, username, password, phonenumber, gender, joined_on):
+    def __init__(self, cid, name, username, password, phonenumber, gender, consentForData):
         self.cid = cid
         self.name = name
         self.username = username
         self.password = password
         self.phonenumber = phonenumber
         self.gender = gender
-        self.joined_on = joined_on
+        self.consentForData = consentForData
 
     def is_authenticated(self):
         return True
@@ -204,7 +228,7 @@ class BloodPressureLevels(db.Model):
         
 
     def __repr__(self):
-        return f"BloodSugarLevel(id={self.bslID}, bloodSugarLevel='{self.bloodSugarLevel} {self.unit}', dateAndTimeRecorded='{self.dateAndTimeRecorded}', created_at='{self.created_at}')"
+        return f"BloodPressureLevel(id={self.bplID}, bloodPressureLevel='{self.bloodPressureLevel} {self.unit}', dateAndTimeRecorded='{self.dateAndTimeRecorded}', created_at='{self.created_at}')"
 
     def to_json(self):
         return {
