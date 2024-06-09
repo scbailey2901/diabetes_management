@@ -124,7 +124,21 @@ def register():
         
         gender = content['gender']
         caregiver = None
-        weight = int(content['weight'])
+        if usertype == 'Patient':
+            weight = int(content['weight'])
+            height = int(content['height'])
+            isSmoker = content['isSmoker']
+            isDrinker = content['isDrinker']
+            hasHighBP = content['hasHighBP']
+            hasHighChol = content['hasHighChol']
+            hasHeartDisease = content['hasHeartDisease']
+            hadHeartAttack = content['hadHeartAttack']
+            hasTroubleWalking = content['hasTroubleWalking']
+            hadStroke = content['hadStroke']
+            bloodSugarlevels = None
+            bloodPressurelevels = None
+            
+        
         
         
         

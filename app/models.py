@@ -72,14 +72,14 @@ class HealthRecord(db.Model):
     hasHighBP = db.Column(db.Boolean, default = False)
     hasHighChol = db.Column(db.Boolean, default = False)
     hasHeartDisease = db.Column(db.Boolean, default = False)
-    HadHeartAttack = db.Column(db.Boolean, default = False)
-    HadStroke = db.Column(db.Boolean, default = False)
-    HasTroubleWalking = db.Column(db.Boolean, default = False)
+    hadHeartAttack = db.Column(db.Boolean, default = False)
+    hadStroke = db.Column(db.Boolean, default = False)
+    hasTroubleWalking = db.Column(db.Boolean, default = False)
     bloodSugarlevels = db.relationship('BloodSugarLevels', backref='healthrecord')
     bloodPressurelevels = db.relationship('BloodPressureLevels', backref='healthrecord')
     patient_id = db.Column(db.Integer, db.ForeignKey('patient.pid'))
     
-    def __init__(self, hrid, age, weight, height, isSmoker, isDrinker, hasHighBP, hasHighChol, hasHeartDisease, HadHeartAttack, HadStroke,HasTroubleWalking,bloodSugarlevels,bloodPressurelevels,patient_id ):
+    def __init__(self, hrid, age, weight, height, isSmoker, isDrinker, hasHighBP, hasHighChol, hasHeartDisease, hadHeartAttack, hadStroke,hasTroubleWalking,bloodSugarlevels,bloodPressurelevels,patient_id ):
         self.hrid =hrid
         self.age = age
         self.weight = weight
@@ -89,9 +89,9 @@ class HealthRecord(db.Model):
         self.hasHighBP = hasHighBP
         self.hasHighChol = hasHighChol
         self.hasHeartDisease = hasHeartDisease
-        self.HadHeartAttack = HadHeartAttack
-        self.HadStroke = HadStroke
-        self.HasTroubleWalking = HasTroubleWalking
+        self.hadHeartAttack = hadHeartAttack
+        self.hadStroke = hadStroke
+        self.hasTroubleWalking = hasTroubleWalking
         self.bloodSugarlevels = bloodSugarlevels
         self.bloodPressurelevels = bloodPressurelevels
         self.patient_id = patient_id
