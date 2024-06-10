@@ -15,7 +15,7 @@ from app import login_manager
 from flask_wtf.csrf import generate_csrf
 from werkzeug.utils import secure_filename
 import re
-from app.models import Patients, Caregivers, BloodSugarLevels, Credentials
+from app.models import Patients, Caregivers, BloodSugarLevels, Credentials, HealthRecord
 from flask_migrate import Migrate
 import bcrypt
     
@@ -91,61 +91,74 @@ def load_caregiver(id):
 #     return token
 
 
-@app.route('register', methods=['POST'])
+@app.route('register', methods=['POST', 'GET'])
 def register():
-    try: 
-        content = request.json
-        usertype = content['usertype']
-        name = content['name']
-        username = content['username']
-        dob = content['dob']
-        dob = datetime.strptime(dob, "%m/%d/%Y %H:%M").date()
-        age = int((date.today() - dob).days / 365.2425)
-        reg = "^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*#?&])[A-Za-z\d@$!#%*?&]{6,20}$"
-        pat = re.compile(reg)                
-        mat = re.search(pat, content['password'])
-        if mat:
-            password = bcrypt.hashpw(content['password'].encode('utf-8'), bcrypt.gensalt(rounds=15)).decode('utf-8')
-        else: 
-            return make_response({'error': 'Please ensure that your password has at least one uppercase letter, one symbol, one numeral and one lowercase letter.'})
-        
-        eregex = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,7}\b'
-        if(re.fullmatch(eregex, content["email"])):
-            email = content['email']
-        else: 
-            return make_response({'error': 'Please enter a valid email address.'},400)
-        
-        pregex = r"^[189][0-9]{7}$"
-        validphone = re.search(pregex, content['phonenumber'])
-        if validphone: 
-            phonenumber = content['phonenumber']
-        else: 
-            return make_response({'error': 'Please enter a valid phone number'}, 400)
-        
-        gender = content['gender']
-        caregiver = None
-        if usertype == 'Patient':
-            weight = int(content['weight'])
-            height = int(content['height'])
-            isSmoker = content['isSmoker']
-            isDrinker = content['isDrinker']
-            hasHighBP = content['hasHighBP']
-            hasHighChol = content['hasHighChol']
-            hasHeartDisease = content['hasHeartDisease']
-            hadHeartAttack = content['hadHeartAttack']
-            hasTroubleWalking = content['hasTroubleWalking']
-            hadStroke = content['hadStroke']
-            bloodSugarlevels = None
-            bloodPressurelevels = None
+    if request.method =="POST":
+        try: 
+            content = request.json
+            usertype = content['usertype'] # get user type
+            name = content['name'] # get user full name
+            username = content['username'] # get username
+            dob = content['dob'] 
+            dob = datetime.strptime(dob, "%m/%d/%Y %H:%M").date() # convert string dob to date
+            age = int((date.today() - dob).days / 365.2425) # calculate age
+            #validate password
+            reg = "^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*#?&])[A-Za-z\d@$!#%*?&]{6,20}$"
+            pat = re.compile(reg)                
+            mat = re.search(pat, content['password'])
+            if mat:
+                # password = bcrypt.hashpw(content['password'].encode('utf-8'), bcrypt.gensalt(rounds=15)).decode('utf-8')
+                password = content['password']
+            else: 
+                return make_response({'error': 'Password should have at least one uppercase letter, one symbol, one numeral and one lowercase letter.'})
             
-        
-        
-        
-        
-        
-    except Exception as e:
-        print(e)
-        return make_response({'error': 'An error has occurred'},400)
+            eregex = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,7}\b'
+            if(re.fullmatch(eregex, content["email"])):
+                email = content['email']
+            else: 
+                return make_response({'error': 'Please enter a valid email address.'},400)
+            
+            pregex = r"^[189][0-9]{7}$"
+            validphone = re.search(pregex, content['phonenumber'])
+            if validphone: 
+                phonenumber = content['phonenumber']
+            else: 
+                return make_response({'error': 'Please enter a valid phone number'}, 400)
+            
+            gender = content['gender']
+            caregiver = None
+            consentForData = content['consentForData']
+            if usertype == 'Patient':
+                if Patients.query.filter_by(username = username).first():
+                    return make_response({'error': 'Username already exists'}, 400)
+                
+                if Patients.query.filter_by(name = name).first():
+                    return make_response({'error': 'User is already registered.'}, 400) # redirect them to login screen
+                else:
+                    weight = int(content['weight'])
+                    height = int(content['height'])
+                    isSmoker = content['isSmoker']
+                    isDrinker = content['isDrinker']
+                    hasHighBP = content['hasHighBP']
+                    hasHighChol = content['hasHighChol']
+                    hasHeartDisease = content['hasHeartDisease']
+                    hadHeartAttack = content['hadHeartAttack']
+                    hasTroubleWalking = content['hasTroubleWalking']
+                    hadStroke = content['hadStroke']
+                    bloodSugarlevels = []
+                    bloodPressurelevels = []
+                    patient = Patients(age,dob,email,consentForData, name, username, password,phonenumber, gender, caregiver)
+                    db.session.add(patient)
+                    db.session.commit()
+                    patient= Patients.query.filter_by(name=name).first()
+                    healthrecord = HealthRecord(weight, height, isSmoker, isDrinker, hasHighBP, hasHighChol, hasHeartDisease, hadHeartAttack, hadStroke, hasTroubleWalking, [], [], patient.get_id())
+                    db.session.add(healthrecord)
+                    db.session.commit()
+                    return make_response({'error': 'User created successfully'},201)
+        except Exception as e:
+            db.session.rollback()
+            print(e)
+            return make_response({'error': 'An error has occurred'},400)
 
     
 # def get_current_user(user_id):

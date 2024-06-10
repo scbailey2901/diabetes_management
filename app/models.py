@@ -1,5 +1,6 @@
 from . import db
 from datetime import datetime
+from werkzeug.security import generate_password_hash
 
 patient_caregiver = db.Table(
     'patient_caregiver',
@@ -23,15 +24,18 @@ class Patients(db.Model):
     caregivers = db.relationship('Caregivers', secondary=patient_caregiver, backref='patients')
     hrid = db.Column(db.Integer, db.ForeignKey('healthrecord.hrid'))
 
-    def __init__(self, pid, name, username, password, phonenumber, gender,  caregiver, hrid):
-        self.pid = pid
+    def __init__(self, age, dob, email,consentForData, name, username, password, phonenumber, gender,  caregiver):
         self.name = name
         self.username = username
-        self.password = password
+        self.age = age
+        self.dob = dob
+        self.email = email
+        self.password = generate_password_hash(password, method="pbkdf2:sha256")
         self.phonenumber = phonenumber
+        self.consentForData = consentForData
         self.gender = gender
         self.caregivers = caregiver
-        self.hrid = hrid
+        # self.hrid = hrid
         
 
     def is_authenticated(self):
@@ -47,7 +51,7 @@ class Patients(db.Model):
         return str(self.pid)
 
     def __repr__(self):
-        return f"Patient(pid={self.pid}, name='{self.name}', username='{self.username}', password='{self.password}', phonenumber='{self.phonenumber}', gender='{self.gender}', joined_on='{self.joined_on}')"
+        return f"Patient(name='{self.name}', username='{self.username}', password='{self.password}', phonenumber='{self.phonenumber}', gender='{self.gender}', joined_on='{self.joined_on}')"
 
     def to_json(self):
         return {
@@ -67,20 +71,19 @@ class HealthRecord(db.Model):
     age = db.Column(db.Integer)
     weight = db.Column(db.Integer)
     height = db.Column(db.Integer)
-    isSmoker = db.Column(db.Boolean, default= False)
-    isDrinker = db.Column(db.Boolean, default = False)
-    hasHighBP = db.Column(db.Boolean, default = False)
-    hasHighChol = db.Column(db.Boolean, default = False)
-    hasHeartDisease = db.Column(db.Boolean, default = False)
-    hadHeartAttack = db.Column(db.Boolean, default = False)
-    hadStroke = db.Column(db.Boolean, default = False)
-    hasTroubleWalking = db.Column(db.Boolean, default = False)
+    isSmoker = db.Column(db.String(50))
+    isDrinker = db.Column(db.String(50))
+    hasHighBP = db.Column(db.String(50))
+    hasHighChol = db.Column(db.String(50))
+    hasHeartDisease = db.Column(db.String(50))
+    hadHeartAttack = db.Column(db.String(50))
+    hadStroke = db.Column(db.String(50))
+    hasTroubleWalking = db.Column(db.String(50))
     bloodSugarlevels = db.relationship('BloodSugarLevels', backref='healthrecord')
     bloodPressurelevels = db.relationship('BloodPressureLevels', backref='healthrecord')
     patient_id = db.Column(db.Integer, db.ForeignKey('patient.pid'))
     
-    def __init__(self, hrid, age, weight, height, isSmoker, isDrinker, hasHighBP, hasHighChol, hasHeartDisease, hadHeartAttack, hadStroke,hasTroubleWalking,bloodSugarlevels,bloodPressurelevels,patient_id ):
-        self.hrid =hrid
+    def __init__(self, age, weight, height, isSmoker, isDrinker, hasHighBP, hasHighChol, hasHeartDisease, hadHeartAttack, hadStroke,hasTroubleWalking,bloodSugarlevels,bloodPressurelevels,patient_id ):
         self.age = age
         self.weight = weight
         self.height = height
@@ -108,8 +111,7 @@ class Caregivers(db.Model):
     joined_on = db.Column(db.DateTime, default=datetime.now())
     credentials = db.relationship('Credentials', backref='caregivers')
 
-    def __init__(self, cid, name, username, password, phonenumber, gender, consentForData):
-        self.cid = cid
+    def __init__(self, name, username, password, phonenumber, gender, consentForData):
         self.name = name
         self.username = username
         self.password = password
