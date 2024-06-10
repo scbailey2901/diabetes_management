@@ -111,13 +111,14 @@ def register():
                 password = content['password']
             else: 
                 return make_response({'error': 'Password should have at least one uppercase letter, one symbol, one numeral and one lowercase letter.'})
-            
+            #Validate the email address
             eregex = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,7}\b'
             if(re.fullmatch(eregex, content["email"])):
                 email = content['email']
             else: 
                 return make_response({'error': 'Please enter a valid email address.'},400)
             
+            #Validate phone number
             pregex = r"^[189][0-9]{7}$"
             validphone = re.search(pregex, content['phonenumber'])
             if validphone: 
@@ -125,36 +126,72 @@ def register():
             else: 
                 return make_response({'error': 'Please enter a valid phone number'}, 400)
             
-            gender = content['gender']
+            gender = content['gender'] #get gender
             caregiver = None
             consentForData = content['consentForData']
             if usertype == 'Patient':
-                if Patients.query.filter_by(username = username).first():
+                if Patients.query.filter_by(username = username).first():#check if their username has been taken already
                     return make_response({'error': 'Username already exists'}, 400)
                 
-                if Patients.query.filter_by(name = name).first():
+                if Patients.query.filter_by(name = name).first(): #check the user exists
                     return make_response({'error': 'User is already registered.'}, 400) # redirect them to login screen
                 else:
-                    weight = int(content['weight'])
+                    weight = int(content['weight']) # get weight
                     height = int(content['height'])
-                    isSmoker = content['isSmoker']
-                    isDrinker = content['isDrinker']
-                    hasHighBP = content['hasHighBP']
-                    hasHighChol = content['hasHighChol']
-                    hasHeartDisease = content['hasHeartDisease']
-                    hadHeartAttack = content['hadHeartAttack']
-                    hasTroubleWalking = content['hasTroubleWalking']
-                    hadStroke = content['hadStroke']
-                    bloodSugarlevels = []
-                    bloodPressurelevels = []
+                    if content['isSmoker'] == "Yes":
+                        isSmoker = True
+                    
+                    if content['isDrinker'].lower() =="Yes":
+                        isDrinker = True
+                        
+                    if content['hasHighBP'] =="Yes":
+                        hasHighBP = True
+                        
+                    if content['hasHighChol'] =="Yes":
+                        hasHighChol = True
+                    
+                    if content['hasHeartDisease'] == "Yes":
+                        hasHeartDisease = True
+                        
+                    if content['hadHeartAttack'] == "Yes":
+                        hadHeartAttack = True
+                        
+                    if content['hasTroubleWalking'].lower() == "Yes": 
+                        hasTroubleWalking = True
+                        
+                    if content['hadStroke'] == "Yes":
+                        hadStroke =True
+                        
+                    weightUnits = content['weightUnits']
+                    heightUnits = content['heightUnits']
+                    # bloodSugarlevels = []
+                    # bloodPressurelevels = []
                     patient = Patients(age,dob,email,consentForData, name, username, password,phonenumber, gender, caregiver)
                     db.session.add(patient)
                     db.session.commit()
                     patient= Patients.query.filter_by(name=name).first()
-                    healthrecord = HealthRecord(weight, height, isSmoker, isDrinker, hasHighBP, hasHighChol, hasHeartDisease, hadHeartAttack, hadStroke, hasTroubleWalking, [], [], patient.get_id())
+                    healthrecord = HealthRecord(weight,weightUnits, height, heightUnits, isSmoker, isDrinker, hasHighBP, hasHighChol, hasHeartDisease, hadHeartAttack, hadStroke, hasTroubleWalking, [], [], patient.get_id())
                     db.session.add(healthrecord)
                     db.session.commit()
-                    return make_response({'error': 'User created successfully'},201)
+                    return make_response({'success': 'User created successfully'},201)
+            elif usertype == "Doctor" or usertype =="Nurse":
+                if Caregivers.query.filter_by(username = username).first():#check if their username has been taken already
+                    return make_response({'error': 'Username already exists'}, 400)
+                
+                if Caregivers.query.filter_by(name = name).first(): #check the user exists
+                    return make_response({'error': 'User is already registered.'}, 400) # redirect them to login screen
+                else:
+                    if (isAllowedFile(content['filename'])):
+                        filename = secure_filename(content['filename'])
+                        filename.save(os.path.join(app.config['UPLOAD_FOLDER'], filename)) #need to check if this will work when actual file is uploaded
+                        caregiver = Caregivers(name, username, age, dob, email, password, phonenumber, gender, consentForData)
+                        db.session.add(caregiver)
+                        db.session.commit()
+                        caregiver= Caregivers.query.filter_by(name=name).first()
+                        credentials = Credentials(filename, caregiver.get_id(), caregiver.get_name())
+                        db.session.add(credentials)
+                        db.session.commit()
+                        return make_response({'success': 'User has been successfully registered. Please give us 3 days to validate your credentials.'},201)
         except Exception as e:
             db.session.rollback()
             print(e)
@@ -172,9 +209,93 @@ def register():
 # def load_user(user_id):
 #     return Patients.query.get(int(user_id))
 
-@app.route("/recordBloodSugar", methods=['POST'])
-def registeruser():
-    return "test"
+@app.route("/recordBloodSugar/<pid>", methods=['POST']) # patient personally adds their recordBloodSugar Levels
+def recordBloodSugar(pid):
+    if request.method =="POST":
+        try: 
+            content = request.json
+            bloodSugarLevel = content['bloodSugarLevel']
+            unit = content['unit']
+            dateAndTimeRecorded = content['dateAndTimeRecorded']
+            dateAndTimeRecorded = datetime.strptime(dateAndTimeRecorded, "%m/%d/%Y %H:%M").date()
+            notes = content['notes']
+            patient= Patients.query.filter_by(pid=pid).first() is not None
+            if patient: 
+                hrid = Patients.query.filter_by(pid=pid).first().get_hrid()
+                bloodsugarlevel = BloodSugarLevels(int(bloodSugarLevel), unit, dateAndTimeRecorded, hrid, notes)
+                db.session.add(bloodsugarlevel)
+                db.session.commit() #Modify this to allow it to update the Health record
+                return make_response({'success': 'Blood Sugar Level Recorded Successfully'},201)
+        except Exception as e:
+            db.session.rollback()
+            print(e)
+            return make_response({'error': 'An error has occurred'},400)
+     
+@app.route("/recordBloodPressure/<pid>", methods=['POST']) # patient personally adds their recordBloodSugar Levels
+def recordBloodPressure(pid):
+    if request.method =="POST":
+        try: 
+            content = request.json
+            bloodPressureLevel = content['bloodPressureLevel']
+            unit = content['unit']
+            dateAndTimeRecorded = content['dateAndTimeRecorded']
+            dateAndTimeRecorded = datetime.strptime(dateAndTimeRecorded, "%m/%d/%Y %H:%M").date()
+            notes = content['notes']
+            patient= Patients.query.filter_by(pid=pid).first() is not None
+            if patient: 
+                hrid = Patients.query.filter_by(pid=pid).first().get_hrid()
+                bloodpressurelevel = BloodPressureLevels(int(bloodPressureLevel), unit, dateAndTimeRecorded, hrid, notes)
+                db.session.add(bloodpressurelevel)
+                db.session.commit() #Modify this to allow it to update the Health record
+                return make_response({'success': 'Blood Pressure Level Recorded Successfully'},201)
+        except Exception as e:
+            db.session.rollback()
+            print(e)
+            return make_response({'error': 'An error has occurred'},400)
+     
+
+@app.route("/recordBloodPressure/<pid>", methods=['POST']) # patient personally creates a Medication reminder
+def recordBloodPressure(pid):
+    if request.method =="POST":
+        try: 
+            content = request.json
+            bloodPressureLevel = content['bloodPressureLevel']
+            unit = content['unit']
+            dateAndTimeRecorded = content['dateAndTimeRecorded']
+            dateAndTimeRecorded = datetime.strptime(dateAndTimeRecorded, "%m/%d/%Y %H:%M").date()
+            notes = content['notes']
+            patient= Patients.query.filter_by(pid=pid).first() is not None
+            if patient: 
+                hrid = Patients.query.filter_by(pid=pid).first().get_hrid()
+                bloodpressurelevel = BloodPressureLevels(int(bloodPressureLevel), unit, dateAndTimeRecorded, hrid, notes)
+                db.session.add(bloodpressurelevel)
+                db.session.commit() #Modify this to allow it to update the Health record
+                return make_response({'success': 'Blood Pressure Level Recorded Successfully'},201)
+        except Exception as e:
+            db.session.rollback()
+            print(e)
+            return make_response({'error': 'An error has occurred'},400)     
+
+# username = data.username.data
+#             password = data.password.data
+#             timestamp= datetime.utcnow()
+#             expiry_date= timestamp+timedelta(days=7)
+#             user = Users.query.filter_by(username=username).first()
+#             print(user)
+#             if user is not None and check_password_hash(user.password, password):
+#                 payload = {'sub': user.id, "iat":timestamp, "exp": expiry_date}
+                
+#                 token = jwt.encode(payload, app.config['SECRET_KEY'], algorithm = 'HS256')
+#                 if login_user(user):
+#                     load_user(user.id)
+#                 return jsonify(status='success', message = 'User successfully logged in.', id=user.id, token=token)
+#             return jsonify(errors="Invalid username or password")
+#         except Exception as e:
+#             print(e)
+#             return jsonify(errors='An error occurred while processing your request'), 500
+#     return jsonify(errors='Invalid request method'), 405
+
+
 
 @app.route('/<file_name>.txt')
 def send_text_file(file_name):

@@ -19,7 +19,7 @@ class Patients(db.Model):
     password = db.Column(db.String(256), nullable=False)
     phonenumber = db.Column(db.String(15))
     gender = db.Column(db.String(20), nullable=False)
-    consentForData = db.Column(db.Boolean, default = False)
+    consentForData = db.Column(db.String(20))
     joined_on = db.Column(db.DateTime, default=datetime.now())
     caregivers = db.relationship('Caregivers', secondary=patient_caregiver, backref='patients')
     hrid = db.Column(db.Integer, db.ForeignKey('healthrecord.hrid'))
@@ -50,6 +50,9 @@ class Patients(db.Model):
     def get_id(self):
         return str(self.pid)
 
+    def get_hrid(self):
+        return str(self.hrid)
+    
     def __repr__(self):
         return f"Patient(name='{self.name}', username='{self.username}', password='{self.password}', phonenumber='{self.phonenumber}', gender='{self.gender}', joined_on='{self.joined_on}')"
 
@@ -65,27 +68,30 @@ class Patients(db.Model):
             "hrid": self.hrid
         }
 
-class HealthRecord(db.Model):
+class HealthRecord(db.Model): #add activity level
     __tablename__ = 'healthrecord'
     hrid= db.Column(db.Integer, primary_key=True, autoincrement=True)
-    age = db.Column(db.Integer)
     weight = db.Column(db.Integer)
+    weightUnits = db.Column(db.String(50))
     height = db.Column(db.Integer)
-    isSmoker = db.Column(db.String(50))
-    isDrinker = db.Column(db.String(50))
-    hasHighBP = db.Column(db.String(50))
-    hasHighChol = db.Column(db.String(50))
-    hasHeartDisease = db.Column(db.String(50))
-    hadHeartAttack = db.Column(db.String(50))
-    hadStroke = db.Column(db.String(50))
-    hasTroubleWalking = db.Column(db.String(50))
+    heightUnits = db.Column(db.String(50))
+    isSmoker = db.Column(db.Boolean, default = False)
+    isDrinker = db.Column(db.Boolean, default = False)
+    hasHighBP = db.Column(db.Boolean, default = False)
+    hasHighChol = db.Column(db.Boolean, default = False)
+    hasHeartDisease = db.Column(db.Boolean, default = False)
+    hadHeartAttack = db.Column(db.Boolean, default = False)
+    hadStroke = db.Column(db.Boolean, default = False)
+    hasTroubleWalking = db.Column(db.Boolean, default = False)
     bloodSugarlevels = db.relationship('BloodSugarLevels', backref='healthrecord')
     bloodPressurelevels = db.relationship('BloodPressureLevels', backref='healthrecord')
     patient_id = db.Column(db.Integer, db.ForeignKey('patient.pid'))
     
-    def __init__(self, age, weight, height, isSmoker, isDrinker, hasHighBP, hasHighChol, hasHeartDisease, hadHeartAttack, hadStroke,hasTroubleWalking,bloodSugarlevels,bloodPressurelevels,patient_id ):
+    def __init__(self, age, weight,weightUnits, height, heightUnits,isSmoker, isDrinker, hasHighBP, hasHighChol, hasHeartDisease, hadHeartAttack, hadStroke,hasTroubleWalking,bloodSugarlevels,bloodPressurelevels,patient_id ):
         self.age = age
         self.weight = weight
+        self.weightUnits = weightUnits
+        self.heightUnits = heightUnits
         self.height = height
         self.isSmoker = isSmoker
         self.isDrinker = isDrinker
@@ -104,16 +110,22 @@ class Caregivers(db.Model):
     cid = db.Column(db.Integer, primary_key=True, autoincrement=True)
     name = db.Column(db.String(256))
     username = db.Column(db.String(200))
+    age = db.Column(db.Integer)
+    dob = db.Column(db.DateTime)
+    email = db.Column(db.String(256))
     password = db.Column(db.String(200))
     phonenumber = db.Column(db.String(15))
     gender = db.Column(db.String(20))
-    consentForData = db.Column(db.Boolean, default=False)
+    consentForData = db.Column(db.String(20))
     joined_on = db.Column(db.DateTime, default=datetime.now())
     credentials = db.relationship('Credentials', backref='caregivers')
 
-    def __init__(self, name, username, password, phonenumber, gender, consentForData):
+    def __init__(self, name, username,age, dob,email, password, phonenumber, gender, consentForData):
         self.name = name
         self.username = username
+        self.age = age
+        self.dob = dob
+        self.email = email
         self.password = password
         self.phonenumber = phonenumber
         self.gender = gender
@@ -158,8 +170,7 @@ class Credentials(db.Model):
         else:
             return None
 
-    def __init__(self, crid, filename, caregiver_id, caregiver_name):
-        self.crid = crid
+    def __init__(self, filename, caregiver_id, caregiver_name):
         self.filename = filename
         self.caregiver_id = caregiver_id
         self.caregiver_name = caregiver_name
@@ -174,6 +185,12 @@ class Credentials(db.Model):
             "caregiverId": self.caregiver_id,
             "caregiverName": self.caregiver_name
         }
+    
+    def get_id(self):
+        return str(self.crid)
+    
+    def get_name(self):
+        return str(self.name)
 
 class BloodSugarLevels(db.Model):
     __tablename__ = 'bloodsugarlevels'
@@ -184,19 +201,19 @@ class BloodSugarLevels(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.now)
     patient_id = db.Column(db.Integer, db.ForeignKey('patients.pid'))
     hrid = db.Column(db.Integer, db.ForeignKey('healthrecord.hrid'))
+    notes = db.Column(db.String(256))
 
-    def __init__(self, bslID, bloodSugarLevel, unit, dateAndTimeRecorded, created_at, patient_id, hrid):
-        self.bslID = bslID
+    def __init__(self, bloodSugarLevel, unit, dateAndTimeRecorded,  patient_id, hrid, notes):
         self.bloodSugarLevel = bloodSugarLevel
         self.unit = unit
         self.dateAndTimeRecorded = dateAndTimeRecorded
-        self.created_at = created_at
         self.patient_id = patient_id
         self.hrid = hrid
+        self.notes = notes
         
 
     def __repr__(self):
-        return f"BloodSugarLevel(id={self.bslID}, bloodSugarLevel='{self.bloodSugarLevel} {self.unit}', dateAndTimeRecorded='{self.dateAndTimeRecorded}', created_at='{self.created_at}')"
+        return f"BloodSugarLevel(bloodSugarLevel='{self.bloodSugarLevel} {self.unit}', dateAndTimeRecorded='{self.dateAndTimeRecorded}', created_at='{self.created_at}')"
 
     def to_json(self):
         return {
