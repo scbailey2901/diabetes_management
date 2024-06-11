@@ -91,7 +91,7 @@ def load_caregiver(id):
 #     return token
 
 
-@app.route('register', methods=['POST', 'GET'])
+@app.route('/register', methods=['POST', 'GET'])
 def register():
     if request.method =="POST":
         try: 
@@ -254,28 +254,15 @@ def recordBloodPressure(pid):
             return make_response({'error': 'An error has occurred'},400)
      
 
-@app.route("/recordBloodPressure/<pid>", methods=['POST']) # patient personally creates a Medication reminder
-def recordBloodPressure(pid):
-    if request.method =="POST":
-        try: 
-            content = request.json
-            bloodPressureLevel = content['bloodPressureLevel']
-            unit = content['unit']
-            dateAndTimeRecorded = content['dateAndTimeRecorded']
-            dateAndTimeRecorded = datetime.strptime(dateAndTimeRecorded, "%m/%d/%Y %H:%M").date()
-            notes = content['notes']
-            patient= Patients.query.filter_by(pid=pid).first() is not None
-            if patient: 
-                hrid = Patients.query.filter_by(pid=pid).first().get_hrid()
-                bloodpressurelevel = BloodPressureLevels(int(bloodPressureLevel), unit, dateAndTimeRecorded, hrid, notes)
-                db.session.add(bloodpressurelevel)
-                db.session.commit() #Modify this to allow it to update the Health record
-                return make_response({'success': 'Blood Pressure Level Recorded Successfully'},201)
-        except Exception as e:
-            db.session.rollback()
-            print(e)
-            return make_response({'error': 'An error has occurred'},400)     
 
+# convert food
+# api_url = 'https://api.calorieninjas.com/v1/nutrition?query='
+# query = '3lb carrots and a chicken sandwich'
+# response = requests.get(api_url + query, headers={'X-Api-Key': 'UdjAYE21RFKdvFnrUhM25g==xL6FYYElHVpuQrAJ'})
+# if response.status_code == requests.codes.ok:
+#     print(response.text)
+# else:
+#     print("Error:", response.status_code, response.text)
 # username = data.username.data
 #             password = data.password.data
 #             timestamp= datetime.utcnow()
