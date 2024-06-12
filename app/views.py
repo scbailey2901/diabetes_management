@@ -219,13 +219,18 @@ def recordBloodSugar(pid):
             dateAndTimeRecorded = content['dateAndTimeRecorded']
             dateAndTimeRecorded = datetime.strptime(dateAndTimeRecorded, "%m/%d/%Y %H:%M").date()
             notes = content['notes']
+            creator = content['creator']
             patient= Patients.query.filter_by(pid=pid).first() is not None
-            if patient: 
-                hrid = Patients.query.filter_by(pid=pid).first().get_hrid()
-                bloodsugarlevel = BloodSugarLevels(int(bloodSugarLevel), unit, dateAndTimeRecorded, hrid, notes)
-                db.session.add(bloodsugarlevel)
-                db.session.commit() #Modify this to allow it to update the Health record
-                return make_response({'success': 'Blood Sugar Level Recorded Successfully'},201)
+            isCreatorReal = (Patients.query.filter_by(name=creator).first() is not None) or (Caregivers.query.filter_by(name=creator).first() is not None) 
+            if isCreatorReal:
+                if patient: 
+                    hrid = Patients.query.filter_by(pid=pid).first().get_hrid()
+                    bloodsugarlevel = BloodSugarLevels(int(bloodSugarLevel), unit, dateAndTimeRecorded, pid, hrid, notes, creator)
+                    db.session.add(bloodsugarlevel)
+                    db.session.commit() #Modify this to allow it to update the Health record
+                    return make_response({'success': 'Blood Sugar Level Recorded Successfully'},201)
+                return make_response({'error': 'Patient does not exist'},400)
+            return make_response({'error': 'The user attempting to create the blood pressure record does not exist.'},400)
         except Exception as e:
             db.session.rollback()
             print(e)
@@ -241,20 +246,56 @@ def recordBloodPressure(pid):
             dateAndTimeRecorded = content['dateAndTimeRecorded']
             dateAndTimeRecorded = datetime.strptime(dateAndTimeRecorded, "%m/%d/%Y %H:%M").date()
             notes = content['notes']
+            creator = content['creator']
             patient= Patients.query.filter_by(pid=pid).first() is not None
-            if patient: 
-                hrid = Patients.query.filter_by(pid=pid).first().get_hrid()
-                bloodpressurelevel = BloodPressureLevels(int(bloodPressureLevel), unit, dateAndTimeRecorded, hrid, notes)
-                db.session.add(bloodpressurelevel)
-                db.session.commit() #Modify this to allow it to update the Health record
-                return make_response({'success': 'Blood Pressure Level Recorded Successfully'},201)
-        except Exception as e:
+            isCreatorReal = (Patients.query.filter_by(name=creator).first() is not None) or (Caregivers.query.filter_by(name=creator).first() is not None) 
+            if isCreatorReal:
+                if patient: 
+                    hrid = Patients.query.filter_by(pid=pid).first().get_hrid()
+                    bloodpressurelevel = BloodPressureLevels(int(bloodPressureLevel), unit, dateAndTimeRecorded,creator,pid, hrid, notes)
+                    db.session.add(bloodpressurelevel)
+                    db.session.commit() #Modify this to allow it to update the Health record
+                    return make_response({'success': 'Blood Pressure Level Recorded Successfully'},201)
+                return make_response({'error': 'Patient does not exist'},400)
+            return make_response({'error': 'The user attempting to create the blood pressure record does not exist.'},400)
+        except Exception as e: 
+            db.session.rollback()
+            print(e)
+            return make_response({'error': 'An error has occurred'},400)
+     
+@app.route("/createMedicationReminder/<pid>", methods=['POST'])
+def createMedicationReminder(pid):
+    if request.method =="POST":
+        try:
+            content = request.json
+            name = content['name']
+            unit = content['unit']
+            recommendedFrequency = int(content['recommendedFrequency'])
+            dosage = content['dosage']
+            inventory = content['inventory']
+            time = content['time']
+            # hr =int(content['hr'])
+            # min = int(content['min'])
+            # amPm= content['amPm']
+            # if amPm =="PM" or amPm =="pm":
+            #     hr+=12
+            time = datetime.datetime.strptime(time, '%I:%M %p')
+            creator = content['creator']
+            patient= Patients.query.filter_by(pid=pid).first() is not None
+            isCreatorReal = (Patients.query.filter_by(name=creator).first() is not None) or (Caregivers.query.filter_by(name=creator).first() is not None) 
+            if isCreatorReal:
+                if patient: 
+                    patient =Patients.query.filter_by(pid=pid).first()
+                    medication = Medication(name, unit, recommendedFrequency,time, dosage,pid, creator)
+                    alrt=Alert("Hi "+patient.username+"! It's "+ content['time']+ ". Time to take your "+ name + " medication.", "Medication", time)
+            
+        except Exception as e: 
             db.session.rollback()
             print(e)
             return make_response({'error': 'An error has occurred'},400)
      
 
-
+#)
 # convert food
 # api_url = 'https://api.calorieninjas.com/v1/nutrition?query='
 # query = '3lb carrots and a chicken sandwich'

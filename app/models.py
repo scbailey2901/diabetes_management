@@ -198,18 +198,20 @@ class BloodSugarLevels(db.Model):
     bloodSugarLevel = db.Column(db.Integer)
     unit = db.Column(db.String)
     dateAndTimeRecorded = db.Column(db.DateTime)
+    creator = db.Column(db.String(256))
     created_at = db.Column(db.DateTime, default=datetime.now)
     patient_id = db.Column(db.Integer, db.ForeignKey('patients.pid'))
     hrid = db.Column(db.Integer, db.ForeignKey('healthrecord.hrid'))
     notes = db.Column(db.String(256))
 
-    def __init__(self, bloodSugarLevel, unit, dateAndTimeRecorded,  patient_id, hrid, notes):
+    def __init__(self, bloodSugarLevel, unit, dateAndTimeRecorded,  patient_id, hrid, notes, creator):
         self.bloodSugarLevel = bloodSugarLevel
         self.unit = unit
         self.dateAndTimeRecorded = dateAndTimeRecorded
         self.patient_id = patient_id
         self.hrid = hrid
         self.notes = notes
+        self.creator = creator
         
 
     def __repr__(self):
@@ -234,14 +236,16 @@ class BloodPressureLevels(db.Model):
     dateAndTimeRecorded = db.Column(db.DateTime)
     created_at = db.Column(db.DateTime, default=datetime.now)
     patient_id = db.Column(db.Integer, db.ForeignKey('patients.pid'))
+    creator = db.Column(db.String(256))
     hrid = db.Column(db.Integer, db.ForeignKey('healthrecord.hrid'))
+    notes = db.Column(db.String(256))
 
-    def __init__(self, bplID, bloodPressureLevel, unit, dateAndTimeRecorded, created_at, patient_id, hrid):
+    def __init__(self, bplID, bloodPressureLevel, unit, dateAndTimeRecorded, creator, patient_id, hrid, notes):
         self.bplID = bplID
         self.bloodSugarLevel = bloodPressureLevel
         self.unit = unit
         self.dateAndTimeRecorded = dateAndTimeRecorded
-        self.created_at = created_at
+        self.creator = creator
         self.patient_id = patient_id
         self.hrid = hrid
         
@@ -259,3 +263,42 @@ class BloodPressureLevels(db.Model):
             "patientId": self.patient_id,
             "healthrecordid": self.hrid
         }
+        
+class Medication(db.Model):
+    __tablename__ = 'medication'
+    mid = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    name = db.Column(db.String(256))
+    unit = db.Column(db.String(256))
+    recommendedFrequency = db.Column(db.Integer)
+    time = db.Column(db.DateTime)
+    dosage = db.Column(db.Integer)
+    inventory = db.Column(db.Integer)
+    pid = db.Column(db.Integer, db.ForeignKey('patients.pid'))
+    creator = db.Column(db.String(256))
+    created_at = db.Column(db.DateTime, default=datetime.now)
+    alerts = db.relationship('Alert', backref='medication')
+    
+    def __init__(self, name, unit, recommendedFrequency, time, dosage, inventory, pid, creator):
+        self.name = name
+        self.unit = unit
+        self.recommendedFrequency = recommendedFrequency
+        self.time = time
+        self.dosage = dosage
+        self.inventory = inventory
+        self.pid = pid
+        self.creator = creator
+        
+        
+class Alert(db.Model):
+    __tablename__ = "alert"
+    aid = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    msg = db.Column(db.String(256))
+    type = db.Column(db.String(200))
+    date_time = db.Column(db.DateTime)
+    pid = db.Column(db.Integer, db.ForeignKey('patients.pid'))
+    mid = db.Column(db.Integer, db.ForeignKey('medication.mid'), nullable = True)
+    
+    def __init__(self, msg, type, date_time, pid):
+        self.msg = msg
+        self.type = type
+        self.datetime = date_time
