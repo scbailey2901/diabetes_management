@@ -1,12 +1,37 @@
 from . import db
 from datetime import datetime
 from werkzeug.security import generate_password_hash
+from enum import Enum
 
 patient_caregiver = db.Table(
     'patient_caregiver',
     db.Column('patient_id', db.Integer, db.ForeignKey('patients.pid')),
     db.Column('caregiver_id', db.Integer, db.ForeignKey('caregivers.cid'), nullable=True)
 )
+
+class CaregiverType(Enum):
+    NURSE = "nurse"
+    DOCTOR = "doctor"
+    FAMILY = "family"
+    
+class Gender(Enum):
+    MALE = "male"
+    FEMALE = "female"
+
+class CredentialType(Enum):
+    MBBS_DEGREE="MBBS Degree Certificate"
+    NURSING_DEGREE="Nursing Degree Certificate"
+    MEDICAL_LICENSE="Medical License"
+
+class AlertType(Enum):
+    MEDICATION = "medication"
+    BP_TOO_LOW = "bp is too low"
+    BP_TOO_HIGH = "bp is too low"
+    AT_RISK_OF_EMERGENCY = "at risk of diabetic emergency"
+    EAT_MEAL = "Remember to eat"
+    TOO_MUCH_SALT = "You are consuming too much sodium"
+    TOO_MUCH_SUGAR = "You are consuming too much sugar/carbs"
+    
 
 class Patients(db.Model):
     __tablename__ = 'patients'
@@ -18,7 +43,7 @@ class Patients(db.Model):
     username = db.Column(db.String(200), unique=True)
     password = db.Column(db.String(256), nullable=False)
     phonenumber = db.Column(db.String(15))
-    gender = db.Column(db.String(20), nullable=False)
+    gender = db.Column(db.Enum(Gender), nullable=False)
     consentForData = db.Column(db.String(20))
     joined_on = db.Column(db.DateTime, default=datetime.now())
     caregivers = db.relationship('Caregivers', secondary=patient_caregiver, backref='patients')
@@ -110,19 +135,21 @@ class Caregivers(db.Model):
     cid = db.Column(db.Integer, primary_key=True, autoincrement=True)
     name = db.Column(db.String(256))
     username = db.Column(db.String(200))
+    type = db.Column(db.Enum(CaregiverType))
     age = db.Column(db.Integer)
     dob = db.Column(db.DateTime)
     email = db.Column(db.String(256))
     password = db.Column(db.String(200))
     phonenumber = db.Column(db.String(15))
-    gender = db.Column(db.String(20))
+    gender = db.Column(db.Enum(Gender))
     consentForData = db.Column(db.String(20))
     joined_on = db.Column(db.DateTime, default=datetime.now())
     credentials = db.relationship('Credentials', backref='caregivers')
 
-    def __init__(self, name, username,age, dob,email, password, phonenumber, gender, consentForData):
+    def __init__(self, name, username,type,age, dob,email, password, phonenumber, gender, consentForData):
         self.name = name
         self.username = username
+        self.type = type
         self.age = age
         self.dob = dob
         self.email = email
@@ -161,6 +188,7 @@ class Credentials(db.Model):
     __tablename__ = 'credentials'
     crid = db.Column(db.Integer, primary_key=True, autoincrement=True)
     filename = db.Column(db.String(200))
+    credentialtype = db.Column(db.Enum(CredentialType))
     caregiver_id = db.Column(db.Integer, db.ForeignKey('caregivers.cid'))
     caregiver_name = db.Column(db.String(256), db.ForeignKey('caregivers.name'))
 
@@ -170,8 +198,9 @@ class Credentials(db.Model):
         else:
             return None
 
-    def __init__(self, filename, caregiver_id, caregiver_name):
+    def __init__(self, filename, credentialtype, caregiver_id, caregiver_name):
         self.filename = filename
+        self.credentialtype = credentialtype
         self.caregiver_id = caregiver_id
         self.caregiver_name = caregiver_name
 
@@ -213,7 +242,9 @@ class BloodSugarLevels(db.Model):
         self.notes = notes
         self.creator = creator
         
-
+    def get_id(self):
+        return str(self.bslid)
+    
     def __repr__(self):
         return f"BloodSugarLevel(bloodSugarLevel='{self.bloodSugarLevel} {self.unit}', dateAndTimeRecorded='{self.dateAndTimeRecorded}', created_at='{self.created_at}')"
 
@@ -240,15 +271,17 @@ class BloodPressureLevels(db.Model):
     hrid = db.Column(db.Integer, db.ForeignKey('healthrecord.hrid'))
     notes = db.Column(db.String(256))
 
-    def __init__(self, bplID, bloodPressureLevel, unit, dateAndTimeRecorded, creator, patient_id, hrid, notes):
-        self.bplID = bplID
+    def __init__(self, bloodPressureLevel, unit, dateAndTimeRecorded, creator, patient_id, hrid, notes):
         self.bloodSugarLevel = bloodPressureLevel
         self.unit = unit
         self.dateAndTimeRecorded = dateAndTimeRecorded
         self.creator = creator
         self.patient_id = patient_id
         self.hrid = hrid
+        self.notes= notes
         
+    def get_id(self):
+        return str(self.bplID)
 
     def __repr__(self):
         return f"BloodPressureLevel(id={self.bplID}, bloodPressureLevel='{self.bloodPressureLevel} {self.unit}', dateAndTimeRecorded='{self.dateAndTimeRecorded}', created_at='{self.created_at}')"
@@ -270,7 +303,6 @@ class Medication(db.Model):
     name = db.Column(db.String(256))
     unit = db.Column(db.String(256))
     recommendedFrequency = db.Column(db.Integer)
-    time = db.Column(db.DateTime)
     dosage = db.Column(db.Integer)
     inventory = db.Column(db.Integer)
     pid = db.Column(db.Integer, db.ForeignKey('patients.pid'))
@@ -278,27 +310,30 @@ class Medication(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.now)
     alerts = db.relationship('Alert', backref='medication')
     
-    def __init__(self, name, unit, recommendedFrequency, time, dosage, inventory, pid, creator):
+    def __init__(self, name, unit, recommendedFrequency, dosage, inventory, pid, creator):
         self.name = name
         self.unit = unit
         self.recommendedFrequency = recommendedFrequency
-        self.time = time
         self.dosage = dosage
         self.inventory = inventory
         self.pid = pid
         self.creator = creator
-        
+    
+    def get_id(self):
+        return str(self.mid)  
         
 class Alert(db.Model):
     __tablename__ = "alert"
     aid = db.Column(db.Integer, primary_key=True, autoincrement=True)
     msg = db.Column(db.String(256))
-    type = db.Column(db.String(200))
+    type = db.Column(db.Enum(AlertType))
     date_time = db.Column(db.DateTime)
     pid = db.Column(db.Integer, db.ForeignKey('patients.pid'))
     mid = db.Column(db.Integer, db.ForeignKey('medication.mid'), nullable = True)
     
-    def __init__(self, msg, type, date_time, pid):
+    def __init__(self, msg, type, date_time, pid, mid):
         self.msg = msg
         self.type = type
         self.datetime = date_time
+        self.pid = pid
+        self.mid = mid

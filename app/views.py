@@ -15,9 +15,9 @@ from app import login_manager
 from flask_wtf.csrf import generate_csrf
 from werkzeug.utils import secure_filename
 import re
-from app.models import Patients, Caregivers, BloodSugarLevels, Credentials, HealthRecord
+from app.models import Patients, Caregivers, BloodSugarLevels, Credentials, HealthRecord, CaregiverType, Gender, CredentialType, AlertType, Alert
 from flask_migrate import Migrate
-import bcrypt
+
     
 from functools import wraps
 import jwt
@@ -126,42 +126,26 @@ def register():
             else: 
                 return make_response({'error': 'Please enter a valid phone number'}, 400)
             
-            gender = content['gender'] #get gender
-            caregiver = None
+            gender = Gender.FEMALE if content['gender'].lower() == "female" else Gender.MALE #get gender. Add non-binary too just in case      
             consentForData = content['consentForData']
             if usertype == 'Patient':
-                if Patients.query.filter_by(username = username).first():#check if their username has been taken already
+                caregiver = None
+                if Patients.query.filter_by(username = username).first() is not None:#check if their username has been taken already
                     return make_response({'error': 'Username already exists'}, 400)
                 
-                if Patients.query.filter_by(name = name).first(): #check the user exists
+                if Patients.query.filter_by(name = name).first() is not None: #check the user exists
                     return make_response({'error': 'User is already registered.'}, 400) # redirect them to login screen
                 else:
                     weight = int(content['weight']) # get weight
                     height = int(content['height'])
-                    if content['isSmoker'] == "Yes":
-                        isSmoker = True
-                    
-                    if content['isDrinker'].lower() =="Yes":
-                        isDrinker = True
-                        
-                    if content['hasHighBP'] =="Yes":
-                        hasHighBP = True
-                        
-                    if content['hasHighChol'] =="Yes":
-                        hasHighChol = True
-                    
-                    if content['hasHeartDisease'] == "Yes":
-                        hasHeartDisease = True
-                        
-                    if content['hadHeartAttack'] == "Yes":
-                        hadHeartAttack = True
-                        
-                    if content['hasTroubleWalking'].lower() == "Yes": 
-                        hasTroubleWalking = True
-                        
-                    if content['hadStroke'] == "Yes":
-                        hadStroke =True
-                        
+                    isSmoker = content['isSmoker'] == "Yes"
+                    isDrinker = content['isDrinker'].lower() =="Yes"
+                    hasHighBP = content['hasHighBP'] =="Yes"
+                    hasHighChol = content['hasHighChol'] =="Yes"
+                    hasHeartDisease = content['hasHeartDisease'] == "Yes"
+                    hadHeartAttack = content['hadHeartAttack'] == "Yes"
+                    hasTroubleWalking = content['hasTroubleWalking'].lower() == "Yes"
+                    hadStroke =content['hadStroke'] == "Yes" 
                     weightUnits = content['weightUnits']
                     heightUnits = content['heightUnits']
                     # bloodSugarlevels = []
@@ -170,28 +154,50 @@ def register():
                     db.session.add(patient)
                     db.session.commit()
                     patient= Patients.query.filter_by(name=name).first()
-                    healthrecord = HealthRecord(weight,weightUnits, height, heightUnits, isSmoker, isDrinker, hasHighBP, hasHighChol, hasHeartDisease, hadHeartAttack, hadStroke, hasTroubleWalking, [], [], patient.get_id())
+                    healthrecord = HealthRecord(age, weight,weightUnits, height, heightUnits, isSmoker, isDrinker, hasHighBP, hasHighChol, hasHeartDisease, hadHeartAttack, hadStroke, hasTroubleWalking, [], [], patient.get_id())
                     db.session.add(healthrecord)
                     db.session.commit()
                     return make_response({'success': 'User created successfully'},201)
             elif usertype == "Doctor" or usertype =="Nurse":
+                caregivertype = CaregiverType.DOCTOR if usertype == "Doctor" else CaregiverType.NURSE
+                
                 if Caregivers.query.filter_by(username = username).first():#check if their username has been taken already
                     return make_response({'error': 'Username already exists'}, 400)
                 
                 if Caregivers.query.filter_by(name = name).first(): #check the user exists
                     return make_response({'error': 'User is already registered.'}, 400) # redirect them to login screen
                 else:
-                    if (isAllowedFile(content['filename'])):
-                        filename = secure_filename(content['filename'])
-                        filename.save(os.path.join(app.config['UPLOAD_FOLDER'], filename)) #need to check if this will work when actual file is uploaded
-                        caregiver = Caregivers(name, username, age, dob, email, password, phonenumber, gender, consentForData)
+                    files = request.files.getlist("file") 
+                    if usertype =="Doctor" and len(files)<2:
+                        return make_response({'error': 'Please upload a copy of both your MBBS degree certificate and your Medical License'}, 400)
+                    else: 
+                        caregiver= Caregivers.query.filter_by(name=name).first() is None
+                        
+                        caregiver = Caregivers(name, username,caregivertype , age, dob, email, password, phonenumber, gender, consentForData)
                         db.session.add(caregiver)
                         db.session.commit()
-                        caregiver= Caregivers.query.filter_by(name=name).first()
-                        credentials = Credentials(filename, caregiver.get_id(), caregiver.get_name())
-                        db.session.add(credentials)
+                        for file in files:
+                            if file != None and file.filename!= None: 
+                                if (isAllowedFile(file.filename)):
+                                    filename = secure_filename(file.filename)
+                                    credentialtype = CredentialType.MBBS_DEGREE if content['credentialtype'] == "Medical Degree Certificate" else CredentialType.MEDICAL_LICENSE if content['credentialtype']=="Medical License" else CredentialType.NURSING_DEGREE
+                                    file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename)) #need to check if this will work when actual file is uploaded
+                                    credentials = Credentials(filename, caregivertype,caregiver.get_id(), caregiver.get_name())
+                                db.session.add(credentials)
+                                db.session.commit()
+                                return make_response({'success': 'User has been successfully registered. Please give us 3 days to validate your credentials.'},201)
+            elif usertype == "Family Member":
+                if usertype =="Family Member":
+                    caregivertype = CaregiverType.FAMILY
+                    if Caregivers.query.filter_by(username = username).first():#check if their username has been taken already
+                        return make_response({'error': 'Username already exists'}, 400)
+                
+                    if Caregivers.query.filter_by(name = name).first(): #check the user exists
+                        return make_response({'error': 'User is already registered.'}, 400) # redirect them to login screen
+                    else:
+                        caregiver = Caregivers(name, username,caregivertype , age, dob, email, password, phonenumber, gender, consentForData)
+                        db.session.add(caregiver)
                         db.session.commit()
-                        return make_response({'success': 'User has been successfully registered. Please give us 3 days to validate your credentials.'},201)
         except Exception as e:
             db.session.rollback()
             print(e)
@@ -273,22 +279,23 @@ def createMedicationReminder(pid):
             recommendedFrequency = int(content['recommendedFrequency'])
             dosage = content['dosage']
             inventory = content['inventory']
-            time = content['time']
-            # hr =int(content['hr'])
-            # min = int(content['min'])
-            # amPm= content['amPm']
-            # if amPm =="PM" or amPm =="pm":
-            #     hr+=12
-            time = datetime.datetime.strptime(time, '%I:%M %p')
             creator = content['creator']
             patient= Patients.query.filter_by(pid=pid).first() is not None
             isCreatorReal = (Patients.query.filter_by(name=creator).first() is not None) or (Caregivers.query.filter_by(name=creator).first() is not None) 
             if isCreatorReal:
-                if patient: 
+                if patient:
                     patient =Patients.query.filter_by(pid=pid).first()
-                    medication = Medication(name, unit, recommendedFrequency,time, dosage,pid, creator)
-                    alrt=Alert("Hi "+patient.username+"! It's "+ content['time']+ ". Time to take your "+ name + " medication.", "Medication", time)
-            
+                    medication = Medication(name, unit, recommendedFrequency, dosage,inventory, pid, creator)
+                    db.session.add(medication)
+                    db.session.commit() 
+                    for i in range(recommendedFrequency):
+                        time = content['time']
+                        time = datetime.strptime(time, '%I:%M %p')
+                        alrt=Alert("Hi "+patient.username+"! It's "+ content['time']+ ". Time to take your "+ name + " medication.", AlertType.MEDICATION, time, pid, medication.mid)
+                        db.session.add(alrt)
+                        db.session.commit()
+                return make_response({'error': 'Patient does not exist'},400)
+            return make_response({'error': 'The user attempting to create the medication reminder does not exist.'},400)
         except Exception as e: 
             db.session.rollback()
             print(e)
