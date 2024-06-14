@@ -30,53 +30,68 @@ def get_csrf():
     return jsonify({'csrf_token': generate_csrf()})
 
 
-ACTIVE = {}
+# ACTIVE = {}
 
-def requires_auth(f):
-  @wraps(f)
-  def decorated(*args, **kwargs):
-    auth = request.headers.get('Authorization', None) # or request.cookies.get('token', None)
+# def requires_auth(f):
+#   @wraps(f)
+#   def decorated(*args, **kwargs):
+#     auth = request.headers.get('Authorization', None) # or request.cookies.get('token', None)
 
-    if not auth:
-      return jsonify({'code': 'authorization_header_missing', 'description': 'Authorization header is expected'}), 401
+#     if not auth:
+#       return jsonify({'code': 'authorization_header_missing', 'description': 'Authorization header is expected'}), 401
 
-    parts = auth.split()
+#     parts = auth.split()
 
-    if parts[0].lower() != 'bearer':
-      return jsonify({'code': 'invalid_header', 'description': 'Authorization header must start with Bearer'}), 401
-    elif len(parts) == 1:
-      return jsonify({'code': 'invalid_header', 'description': 'Token not found'}), 401
-    elif len(parts) > 2:
-      return jsonify({'code': 'invalid_header', 'description': 'Authorization header must be Bearer + \s + token'}), 401
+#     if parts[0].lower() != 'bearer':
+#       return jsonify({'code': 'invalid_header', 'description': 'Authorization header must start with Bearer'}), 401
+#     elif len(parts) == 1:
+#       return jsonify({'code': 'invalid_header', 'description': 'Token not found'}), 401
+#     elif len(parts) > 2:
+#       return jsonify({'code': 'invalid_header', 'description': 'Authorization header must be Bearer + \s + token'}), 401
 
-    token = parts[1]
-    try:
-        payload = jwt.decode(token, app.config['SECRET_KEY'], algorithms=["HS256"])
+#     token = parts[1]
+#     try:
+#         payload = jwt.decode(token, app.config['SECRET_KEY'], algorithms=["HS256"])
 
-    except jwt.ExpiredSignatureError:
-        return jsonify({'code': 'token_expired', 'description': 'token is expired'}), 401
-    except jwt.DecodeError:
-        return jsonify({'code': 'token_invalid_signature', 'description': 'Token signature is invalid'}), 401
+#     except jwt.ExpiredSignatureError:
+#         return jsonify({'code': 'token_expired', 'description': 'token is expired'}), 401
+#     except jwt.DecodeError:
+#         return jsonify({'code': 'token_invalid_signature', 'description': 'Token signature is invalid'}), 401
 
-    g.current_user = user = payload
-    return f(*args, **kwargs)
+#     g.current_user = user = payload
+#     return f(*args, **kwargs)
 
-  return decorated
+#   return decorated
+
+def patient_or_caregiver_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        patient_id = kwargs.get('pid')
+        patient = Patients.query.get(patient_id)
+        if not patient:
+            return jsonify({'error': 'Patient not found'}), 404
+
+        if current_user.is_authenticated:
+            if current_user == patient or current_user in patient.caregivers:
+                return f(*args, **kwargs)
+        
+        return jsonify({'error': 'Unauthorized access'}), 403
+    
+    return decorated_function
 
 @login_manager.user_loader
-def load_patient(id):
-    user = db.session.execute(db.select(Patients).filter_by(pid=id)).scalar()
-    if user is not None:
-        ACTIVE[id] = user
-    return user
+def load_user(id):
+    patient = db.session.execute(db.select(Patients).filter_by(pid=id)).scalar()
+    if patient:
+        return patient
+    
+    caregiver = db.session.execute(db.select(Caregivers).filter_by(cid=id)).scalar()
+    if caregiver: 
+        return caregiver
+    
+    return None
 
-@login_manager.user_loader
-def load_caregiver(id):
-    user = db.session.execute(db.select(Caregivers).filter_by(cid=id)).scalar()
-    if user is not None:
-        ACTIVE[id] = user
-    return user
-###
+##
 #generating a jwt token
 ###
 # @app.route("/api/v1/generate-token")
@@ -90,12 +105,40 @@ def load_caregiver(id):
 #     token = jwt.encode(payload, app.config['SECRET_KEY'], algorithm='HS256')
 #     return token
 
+@app.route("/login", methods=['POST','GET'])
+def login():
+    if request.method =="POST":
+        try:
+            content = request.get_json()
+            email = content['email']
+            password = content['password']
+            patient = Patients.query.filter_by(email = email).first()
+            if patient and check_password_hash(patient.password, password):
+                login_user(patient)
+                return make_response({"success": "User logged in successfully."})
+                
+            caregiver = Caregivers.query.filter_by(email = email).first()
+            if caregiver and check_password_hash(caregiver.password, password):
+                login_user(caregiver)
+                return make_response({"success": "User logged in successfully."})
+            
+            return make_response({'error': 'Login failed. Please check your credentials to ensure they are correct.'},400)
+        except Exception as e:
+            db.session.rollback()
+            print(e)
+            return make_response({'error': 'An error occurred during login.'},400)
+
+@app.route('/logout', method=['GET'])
+@login_required
+def logout():
+    logout_user()
+    return make_response({'success': "User has been successfully logged out."})
 
 @app.route('/register', methods=['POST', 'GET'])
 def register():
     if request.method =="POST":
         try: 
-            content = request.json
+            content = request.get_json()
             usertype = content['usertype'] # get user type
             name = content['name'] # get user full name
             username = content['username'] # get username
@@ -215,11 +258,17 @@ def register():
 # def load_user(user_id):
 #     return Patients.query.get(int(user_id))
 
-@app.route("/recordBloodSugar/<pid>", methods=['POST']) # patient personally adds their recordBloodSugar Levels
+def logout():
+    logout_user()
+    return make_response({'success': 'User was logged out successfully.'},400)
+
+@app.route("/recordBloodSugar/<pid>", methods=['POST','GET']) # patient personally adds their recordBloodSugar Levels
+@login_required
+@patient_or_caregiver_required
 def recordBloodSugar(pid):
     if request.method =="POST":
         try: 
-            content = request.json
+            content = request.get_json()
             bloodSugarLevel = content['bloodSugarLevel']
             unit = content['unit']
             dateAndTimeRecorded = content['dateAndTimeRecorded']
@@ -243,10 +292,12 @@ def recordBloodSugar(pid):
             return make_response({'error': 'An error has occurred'},400)
      
 @app.route("/recordBloodPressure/<pid>", methods=['POST']) # patient personally adds their recordBloodSugar Levels
+@login_required
+@patient_or_caregiver_required
 def recordBloodPressure(pid):
     if request.method =="POST":
         try: 
-            content = request.json
+            content = request.get_json()
             bloodPressureLevel = content['bloodPressureLevel']
             unit = content['unit']
             dateAndTimeRecorded = content['dateAndTimeRecorded']
@@ -270,10 +321,12 @@ def recordBloodPressure(pid):
             return make_response({'error': 'An error has occurred'},400)
      
 @app.route("/createMedicationReminder/<pid>", methods=['POST'])
+@login_required
+@patient_or_caregiver_required
 def createMedicationReminder(pid):
     if request.method =="POST":
         try:
-            content = request.json
+            content = request.get_json()
             name = content['name']
             unit = content['unit']
             recommendedFrequency = int(content['recommendedFrequency'])
@@ -285,13 +338,13 @@ def createMedicationReminder(pid):
             if isCreatorReal:
                 if patient:
                     patient =Patients.query.filter_by(pid=pid).first()
-                    medication = Medication(name, unit, recommendedFrequency, dosage,inventory, pid, creator)
+                    medication = Medication(name, unit, recommendedFrequency, dosage,inventory, pid, creator, creator)
                     db.session.add(medication)
                     db.session.commit() 
                     for i in range(recommendedFrequency):
                         time = content['time']
                         time = datetime.strptime(time, '%I:%M %p')
-                        alrt=Alert("Hi "+patient.username+"! It's "+ content['time']+ ". Time to take your "+ name + " medication.", AlertType.MEDICATION, time, pid, medication.mid)
+                        alrt=Alert("Hi "+patient.username+"! It's "+ content['time']+ ". Time to take your "+ medication.name + " medication.", AlertType.MEDICATION, time, pid, medication.mid)
                         db.session.add(alrt)
                         db.session.commit()
                 return make_response({'error': 'Patient does not exist'},400)
@@ -301,7 +354,25 @@ def createMedicationReminder(pid):
             print(e)
             return make_response({'error': 'An error has occurred'},400)
      
-
+@app.route("/editMedicationReminder/<mid>", methods=['PUT', 'GET'])
+@login_required
+@patient_or_caregiver_required
+def editMedicationReminder(mid):
+    if request.method =="PUT":
+        try:
+            content = request.get_json()
+            medication = Medication.query.filter_by(mid=mid).first()
+            alerts= Alert.query.filter_by(mid=mid)
+            medication.name = content['name'] if content['name'] != None else medication.name
+            medication.unit = content['unit'] if content['unit'] != None else medication.unit
+            medication.recommendedFrequency = content['recommendedFrequency'] if  content['recommendedFrequency'] != None else medication.recommendedFrequency
+            medication.dosage = content['dosage'] if content['dosage']  != None else medication.dosage
+            medication.inventory = content['inventory'] if content['inventory'] != None else medication.inventory
+             
+        except Exception as e: 
+            db.session.rollback()
+            print(e)
+            return make_response({'error': 'An error has occurred'},400)
 #)
 # convert food
 # api_url = 'https://api.calorieninjas.com/v1/nutrition?query='

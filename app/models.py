@@ -134,7 +134,7 @@ class Caregivers(db.Model):
     __tablename__ = 'caregivers'
     cid = db.Column(db.Integer, primary_key=True, autoincrement=True)
     name = db.Column(db.String(256))
-    username = db.Column(db.String(200))
+    username = db.Column(db.String(200), unique = True)
     type = db.Column(db.Enum(CaregiverType))
     age = db.Column(db.Integer)
     dob = db.Column(db.DateTime)
@@ -308,9 +308,11 @@ class Medication(db.Model):
     pid = db.Column(db.Integer, db.ForeignKey('patients.pid'))
     creator = db.Column(db.String(256))
     created_at = db.Column(db.DateTime, default=datetime.now)
+    lastupdated_by = db.Column(db.String(256), nullable = True)
     alerts = db.relationship('Alert', backref='medication')
+    audits = db.relationship('Audit', backref='medication', lazy='dynamic')
     
-    def __init__(self, name, unit, recommendedFrequency, dosage, inventory, pid, creator):
+    def __init__(self, name, unit, recommendedFrequency, dosage, inventory, pid, creator, last_updated_by):
         self.name = name
         self.unit = unit
         self.recommendedFrequency = recommendedFrequency
@@ -318,10 +320,23 @@ class Medication(db.Model):
         self.inventory = inventory
         self.pid = pid
         self.creator = creator
+        self.last_updated_by = last_updated_by
     
     def get_id(self):
         return str(self.mid)  
-        
+
+class MedicationAudit(db.Model):
+    __tablename__ = "medicationaudit"
+    auid= db.Column(db.Integer, primary_key=True, autoincrement=True)
+    mid = db.Column(db.Integer, db.ForeignKey('medication.mid'))
+    updated_at = db.Column(db.DateTime, default=datetime.now)
+    updated_by = db.Column(db.String(256))
+    
+    def __init__(self, mid, updated_by):
+        self.mid = mid
+        self.updated_by = updated_by
+
+       
 class Alert(db.Model):
     __tablename__ = "alert"
     aid = db.Column(db.Integer, primary_key=True, autoincrement=True)
