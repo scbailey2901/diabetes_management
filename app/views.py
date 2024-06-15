@@ -193,7 +193,7 @@ def register():
                     heightUnits = content['heightUnits']
                     # bloodSugarlevels = []
                     # bloodPressurelevels = []
-                    patient = Patients(age,dob,email,consentForData, name, username, password,phonenumber, gender, caregiver)
+                    patient = Patients(age,dob,email,consentForData, name, username, password,phonenumber, gender)
                     db.session.add(patient)
                     db.session.commit()
                     patient= Patients.query.filter_by(name=name).first()
@@ -332,7 +332,7 @@ def createMedicationReminder(pid):
             recommendedFrequency = int(content['recommendedFrequency'])
             dosage = content['dosage']
             inventory = content['inventory']
-            creator = content['creator']
+            creator = current_user
             patient= Patients.query.filter_by(pid=pid).first() is not None
             isCreatorReal = (Patients.query.filter_by(name=creator).first() is not None) or (Caregivers.query.filter_by(name=creator).first() is not None) 
             if isCreatorReal:
@@ -347,6 +347,7 @@ def createMedicationReminder(pid):
                         alrt=Alert("Hi "+patient.username+"! It's "+ content['time']+ ". Time to take your "+ medication.name + " medication.", AlertType.MEDICATION, time, pid, medication.mid)
                         db.session.add(alrt)
                         db.session.commit()
+                    return make_response({'success': 'Medication reminder has been created successfully'},200)
                 return make_response({'error': 'Patient does not exist'},400)
             return make_response({'error': 'The user attempting to create the medication reminder does not exist.'},400)
         except Exception as e: 
@@ -362,18 +363,54 @@ def editMedicationReminder(mid):
         try:
             content = request.get_json()
             medication = Medication.query.filter_by(mid=mid).first()
-            alerts= Alert.query.filter_by(mid=mid)
-            medication.name = content['name'] if content['name'] != None else medication.name
-            medication.unit = content['unit'] if content['unit'] != None else medication.unit
-            medication.recommendedFrequency = content['recommendedFrequency'] if  content['recommendedFrequency'] != None else medication.recommendedFrequency
-            medication.dosage = content['dosage'] if content['dosage']  != None else medication.dosage
-            medication.inventory = content['inventory'] if content['inventory'] != None else medication.inventory
-             
+            if medication != None:
+                alerts= Alert.query.filter_by(mid=mid)
+                patient = Patients.query.filter_by(pid=medication.pid).first()
+                medication.name = content['name'] if content['name'] != None else medication.name
+                medication.unit = content['unit'] if content['unit'] != None else medication.unit
+                medication.recommendedFrequency = content['recommendedFrequency'] if content['recommendedFrequency'] != None else medication.recommendedFrequency
+                medication.dosage = content['dosage'] if content['dosage']  != None else medication.dosage
+                medication.inventory = content['inventory'] if content['inventory'] != None else medication.inventory
+                for alert in alerts:
+                    db.session.delete(alert)
+                    
+                for i in range(medication.recommendedFrequency):
+                            time = content['time'] if content['time'] != None else medication.time
+                            time = datetime.strptime(time, '%I:%M %p')
+                            alrt=Alert("Hi "+patient.username+"! It's "+ content['time']+ ". Time to take your "+ medication.name + " medication.", AlertType.MEDICATION, time, medication.pid, medication.mid)
+                            db.session.add(alrt)
+                            db.session.commit()
+                return make_response({'success': 'Medication reminder has been updated successfully'},200)
+            return make_response({'error': 'Medication reminder does not exist.'},400)
         except Exception as e: 
             db.session.rollback()
             print(e)
             return make_response({'error': 'An error has occurred'},400)
-#)
+
+@app.route("/viewMedicationReminders/<pid>", methods=['GET'])
+@login_required
+@patient_or_caregiver_required
+def viewMedicationReminder(pid):
+    try:
+        if request.method =="GET":
+            patient= Patients.query.filter_by(pid=pid).first()
+            if patient != None:
+                medications = Medication.query.filter_by(pid=pid).all()
+                if medications != None:
+                    medicationlist=[]
+                    for med in medications:
+                        meds = {"id":med.mid, "medicationName": med.name, "units": med.unit, "recommendedFrequency": med.recommendedFrequency, "times": [datetime.strftime(med.alert.time, '%I:%M %p') for alert in med.alerts], "dosage": med.dosage, "amountInInventory": med.inventory, "patientID":med.pid, "patientName": patient.name, "creator": med.creator, "created_at": med.created_at, "last_updated_by": med.updated_by }
+                        medicationlist.append(meds)
+                    return jsonify(status = "success", medicationlist = medicationlist), 200
+                return make_response({'error': 'Medication reminder does not exist.'}, 400)
+            return make_response({'error': 'Patient does not exist.'},400)
+    except Exception as e: 
+            db.session.rollback()
+            print(e)
+            return make_response({'error': 'An error has occurred.'},400)    
+
+        
+
 # convert food
 # api_url = 'https://api.calorieninjas.com/v1/nutrition?query='
 # query = '3lb carrots and a chicken sandwich'

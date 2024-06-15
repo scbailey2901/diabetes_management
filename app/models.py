@@ -46,10 +46,10 @@ class Patients(db.Model):
     gender = db.Column(db.Enum(Gender), nullable=False)
     consentForData = db.Column(db.String(20))
     joined_on = db.Column(db.DateTime, default=datetime.now())
-    caregivers = db.relationship('Caregivers', secondary=patient_caregiver, backref='patients')
+    caregivers = db.relationship('Caregivers', secondary=patient_caregiver, back_populates='patients')
     hrid = db.Column(db.Integer, db.ForeignKey('healthrecord.hrid'))
 
-    def __init__(self, age, dob, email,consentForData, name, username, password, phonenumber, gender,  caregiver):
+    def __init__(self, age, dob, email,consentForData, name, username, password, phonenumber, gender):
         self.name = name
         self.username = username
         self.age = age
@@ -59,7 +59,6 @@ class Patients(db.Model):
         self.phonenumber = phonenumber
         self.consentForData = consentForData
         self.gender = gender
-        self.caregivers = caregiver
         # self.hrid = hrid
         
 
@@ -144,6 +143,7 @@ class Caregivers(db.Model):
     gender = db.Column(db.Enum(Gender))
     consentForData = db.Column(db.String(20))
     joined_on = db.Column(db.DateTime, default=datetime.now())
+    patients = db.relationship('Patients', secondary=patient_caregiver, back_populates='caregivers')
     credentials = db.relationship('Credentials', backref='caregivers')
 
     def __init__(self, name, username,type,age, dob,email, password, phonenumber, gender, consentForData):
@@ -153,7 +153,7 @@ class Caregivers(db.Model):
         self.age = age
         self.dob = dob
         self.email = email
-        self.password = password
+        self.password = generate_password_hash(password, method="pbkdf2:sha256")
         self.phonenumber = phonenumber
         self.gender = gender
         self.consentForData = consentForData
