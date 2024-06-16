@@ -14,16 +14,18 @@ from flask_login import login_user, logout_user, current_user, login_required, L
 from app import login_manager
 from flask_wtf.csrf import generate_csrf
 from werkzeug.utils import secure_filename
+from dotenv import load_dotenv
 import re
 from app.models import Patients, Caregivers, BloodSugarLevels, Credentials, HealthRecord, CaregiverType, Gender, CredentialType, AlertType, Alert
 from flask_migrate import Migrate
 
     
 from functools import wraps
-import jwt
+# import jwt
 # from flask_mysqldb import MySQL
 import psycopg2
 
+load_dotenv()
 
 @app.route('/api/v1/csrf-token', methods=['GET'])
 def get_csrf():
@@ -105,6 +107,11 @@ def load_user(id):
 #     token = jwt.encode(payload, app.config['SECRET_KEY'], algorithm='HS256')
 #     return token
 
+
+@app.route("/test", methods=['GET'])
+def test():
+    return make_response({"success": "testinggggg."},200)
+
 @app.route("/login", methods=['POST','GET'])
 def login():
     if request.method =="POST":
@@ -115,12 +122,12 @@ def login():
             patient = Patients.query.filter_by(email = email).first()
             if patient and check_password_hash(patient.password, password):
                 login_user(patient)
-                return make_response({"success": "User logged in successfully."})
+                return make_response({"success": "User logged in successfully."},200)
                 
             caregiver = Caregivers.query.filter_by(email = email).first()
             if caregiver and check_password_hash(caregiver.password, password):
                 login_user(caregiver)
-                return make_response({"success": "User logged in successfully."})
+                return make_response({"success": "User logged in successfully."},200)
             
             return make_response({'error': 'Login failed. Please check your credentials to ensure they are correct.'},400)
         except Exception as e:
@@ -128,11 +135,11 @@ def login():
             print(e)
             return make_response({'error': 'An error occurred during login.'},400)
 
-@app.route('/logout', method=['GET'])
+@app.route('/logout', methods=['GET'])
 @login_required
 def logout():
     logout_user()
-    return make_response({'success': "User has been successfully logged out."})
+    return make_response({'success': "User has been successfully logged out."},200)
 
 @app.route('/register', methods=['POST', 'GET'])
 def register():
@@ -153,7 +160,7 @@ def register():
                 # password = bcrypt.hashpw(content['password'].encode('utf-8'), bcrypt.gensalt(rounds=15)).decode('utf-8')
                 password = content['password']
             else: 
-                return make_response({'error': 'Password should have at least one uppercase letter, one symbol, one numeral and one lowercase letter.'})
+                return make_response({'error': 'Password should have at least one uppercase letter, one symbol, one numeral and one lowercase letter.'},400)
             #Validate the email address
             eregex = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,7}\b'
             if(re.fullmatch(eregex, content["email"])):
@@ -170,7 +177,7 @@ def register():
                 return make_response({'error': 'Please enter a valid phone number'}, 400)
             
             gender = Gender.FEMALE if content['gender'].lower() == "female" else Gender.MALE #get gender. Add non-binary too just in case      
-            consentForData = content['consentForData']
+            consentForData = content['consentForData'].lower()
             if usertype == 'Patient':
                 caregiver = None
                 if Patients.query.filter_by(username = username).first() is not None:#check if their username has been taken already
@@ -225,7 +232,7 @@ def register():
                                     filename = secure_filename(file.filename)
                                     credentialtype = CredentialType.MBBS_DEGREE if content['credentialtype'] == "Medical Degree Certificate" else CredentialType.MEDICAL_LICENSE if content['credentialtype']=="Medical License" else CredentialType.NURSING_DEGREE
                                     file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename)) #need to check if this will work when actual file is uploaded
-                                    credentials = Credentials(filename, caregivertype,caregiver.get_id(), caregiver.get_name())
+                                    credentials = Credentials(filename, caregivertype,caregiver.get_id())
                                 db.session.add(credentials)
                                 db.session.commit()
                                 return make_response({'success': 'User has been successfully registered. Please give us 3 days to validate your credentials.'},201)
@@ -355,7 +362,7 @@ def createMedicationReminder(pid):
             print(e)
             return make_response({'error': 'An error has occurred'},400)
      
-@app.route("/editMedicationReminder/<mid>", methods=['PUT', 'GET'])
+@app.route("/editMedicationReminder/<mid>", methods=['PUT', 'GET', 'DELETE'])
 @login_required
 @patient_or_caregiver_required
 def editMedicationReminder(mid):
@@ -403,13 +410,37 @@ def viewMedicationReminder(pid):
                         medicationlist.append(meds)
                     return jsonify(status = "success", medicationlist = medicationlist), 200
                 return make_response({'error': 'Medication reminder does not exist.'}, 400)
-            return make_response({'error': 'Patient does not exist.'},400)
+            return make_response({'error': 'Patien t does not exist.'},400)
     except Exception as e: 
             db.session.rollback()
             print(e)
             return make_response({'error': 'An error has occurred.'},400)    
 
+
         
+@app.route("/deleteMedicationReminders/<mid>", methods=['GET','DELETE'])
+@login_required
+@patient_or_caregiver_required
+def deleteMedicationReminder(mid):
+    try:
+        if request.method == "DELETE":
+            medication = Medication.query.filter_by(mid=mid).first()
+            if medication != None:
+                alerts= Alert.query.filter_by(mid=mid)
+                db.session.delete(medication)
+                for alert in alerts:
+                    db.session.delete(alert)
+                db.commit() 
+                if Medication.query.filter_by(mid=mid).first() == None and Alert.query.filter_by(mid=mid) == 'None':
+                    return make_response({'success': 'The medication reminder has been deleted successfully.'},400)
+                else:
+                    return make_response({'error': 'An error occurred  during the attempt to delete this medication reminder.'},400)
+
+    except Exception as e: 
+            db.session.rollback()
+            print(e)
+            return make_response({'error': 'An error has occurred.'},400)
+
 
 # convert food
 # api_url = 'https://api.calorieninjas.com/v1/nutrition?query='

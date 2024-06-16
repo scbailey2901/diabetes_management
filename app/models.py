@@ -47,7 +47,8 @@ class Patients(db.Model):
     consentForData = db.Column(db.String(20))
     joined_on = db.Column(db.DateTime, default=datetime.now())
     caregivers = db.relationship('Caregivers', secondary=patient_caregiver, back_populates='patients')
-    hrid = db.Column(db.Integer, db.ForeignKey('healthrecord.hrid'))
+    health_records = db.relationship('HealthRecord', backref='patient', lazy=True)
+
 
     def __init__(self, age, dob, email,consentForData, name, username, password, phonenumber, gender):
         self.name = name
@@ -107,9 +108,9 @@ class HealthRecord(db.Model): #add activity level
     hadHeartAttack = db.Column(db.Boolean, default = False)
     hadStroke = db.Column(db.Boolean, default = False)
     hasTroubleWalking = db.Column(db.Boolean, default = False)
-    bloodSugarlevels = db.relationship('BloodSugarLevels', backref='healthrecord')
-    bloodPressurelevels = db.relationship('BloodPressureLevels', backref='healthrecord')
-    patient_id = db.Column(db.Integer, db.ForeignKey('patient.pid'))
+    bloodSugarlevels = db.relationship('BloodSugarLevels', backref='healthrecord', lazy = True)
+    bloodPressurelevels = db.relationship('BloodPressureLevels', backref='healthrecord', lazy = True)
+    patient_id = db.Column(db.Integer, db.ForeignKey('patients.pid'))
     
     def __init__(self, age, weight,weightUnits, height, heightUnits,isSmoker, isDrinker, hasHighBP, hasHighChol, hasHeartDisease, hadHeartAttack, hadStroke,hasTroubleWalking,bloodSugarlevels,bloodPressurelevels,patient_id ):
         self.age = age
@@ -144,7 +145,7 @@ class Caregivers(db.Model):
     consentForData = db.Column(db.String(20))
     joined_on = db.Column(db.DateTime, default=datetime.now())
     patients = db.relationship('Patients', secondary=patient_caregiver, back_populates='caregivers')
-    credentials = db.relationship('Credentials', backref='caregivers')
+    credentials = db.relationship('Credentials', backref='caregivers', lazy = True)
 
     def __init__(self, name, username,type,age, dob,email, password, phonenumber, gender, consentForData):
         self.name = name
@@ -190,7 +191,6 @@ class Credentials(db.Model):
     filename = db.Column(db.String(200))
     credentialtype = db.Column(db.Enum(CredentialType))
     caregiver_id = db.Column(db.Integer, db.ForeignKey('caregivers.cid'))
-    caregiver_name = db.Column(db.String(256), db.ForeignKey('caregivers.name'))
 
     def file_path(self):
         if self.filename:
@@ -198,11 +198,10 @@ class Credentials(db.Model):
         else:
             return None
 
-    def __init__(self, filename, credentialtype, caregiver_id, caregiver_name):
+    def __init__(self, filename, credentialtype, caregiver_id):
         self.filename = filename
         self.credentialtype = credentialtype
         self.caregiver_id = caregiver_id
-        self.caregiver_name = caregiver_name
 
     def __repr__(self):
         return f"Credentials(crid={self.crid}, filename='{self.filename}', caregiver_id={self.caregiver_id}, caregiver_name='{self.caregiver_name}')"
@@ -225,7 +224,7 @@ class BloodSugarLevels(db.Model):
     __tablename__ = 'bloodsugarlevels'
     bslID = db.Column(db.Integer, primary_key=True, autoincrement=True)
     bloodSugarLevel = db.Column(db.Integer)
-    unit = db.Column(db.String)
+    unit = db.Column(db.String(150))
     dateAndTimeRecorded = db.Column(db.DateTime)
     creator = db.Column(db.String(256))
     created_at = db.Column(db.DateTime, default=datetime.now)
@@ -263,7 +262,7 @@ class BloodPressureLevels(db.Model):
     __tablename__ = 'bloodpressurelevels'
     bplID = db.Column(db.Integer, primary_key=True, autoincrement=True)
     bloodPressureLevel = db.Column(db.Integer)
-    unit = db.Column(db.String)
+    unit = db.Column(db.String(150))
     dateAndTimeRecorded = db.Column(db.DateTime)
     created_at = db.Column(db.DateTime, default=datetime.now)
     patient_id = db.Column(db.Integer, db.ForeignKey('patients.pid'))
@@ -309,8 +308,8 @@ class Medication(db.Model):
     creator = db.Column(db.String(256))
     created_at = db.Column(db.DateTime, default=datetime.now)
     lastupdated_by = db.Column(db.String(256), nullable = True)
-    alerts = db.relationship('Alert', backref='medication')
-    audits = db.relationship('Audit', backref='medication', lazy='dynamic')
+    alerts = db.relationship('Alert', backref='medication', lazy =True)
+    audits = db.relationship('Audit', backref='medication', lazy=True)
     
     def __init__(self, name, unit, recommendedFrequency, dosage, inventory, pid, creator, last_updated_by):
         self.name = name
