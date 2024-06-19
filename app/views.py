@@ -83,11 +83,11 @@ def patient_or_caregiver_required(f):
 
 @login_manager.user_loader
 def load_user(id):
-    patient = db.session.execute(db.select(Patients).filter_by(pid=id)).scalar()
+    patient = Patients.query.filter_by(pid=id).first()
     if patient:
         return patient
     
-    caregiver = db.session.execute(db.select(Caregivers).filter_by(cid=id)).scalar()
+    caregiver = Caregivers.query.filter_by(cid=id).first()
     if caregiver: 
         return caregiver
     
@@ -135,7 +135,7 @@ def login():
             print(e)
             return make_response({'error': 'An error occurred during login.'},400)
 
-@app.route('/logout', methods=['GET'])
+@app.route('/logout', methods = ['POST','GET'])
 @login_required
 def logout():
     logout_user()
@@ -150,7 +150,7 @@ def register():
             name = content['name'] # get user full name
             username = content['username'] # get username
             dob = content['dob'] 
-            dob = datetime.strptime(dob, "%m/%d/%Y %H:%M").date() # convert string dob to date
+            dob = datetime.strptime(dob, "%m/%d/%Y").date() # convert string dob to date
             age = int((date.today() - dob).days / 365.2425) # calculate age
             #validate password
             reg = "^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*#?&])[A-Za-z\d@$!#%*?&]{6,20}$"
@@ -160,20 +160,23 @@ def register():
                 # password = bcrypt.hashpw(content['password'].encode('utf-8'), bcrypt.gensalt(rounds=15)).decode('utf-8')
                 password = content['password']
             else: 
+                db.session.rollback()
                 return make_response({'error': 'Password should have at least one uppercase letter, one symbol, one numeral and one lowercase letter.'},400)
             #Validate the email address
             eregex = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,7}\b'
             if(re.fullmatch(eregex, content["email"])):
                 email = content['email']
             else: 
+                db.session.rollback()
                 return make_response({'error': 'Please enter a valid email address.'},400)
             
             #Validate phone number
-            pregex = r"^[189][0-9]{7}$"
+            pregex = r"^\+1\([0-9]{3}\)[0-9]{3}-[0-9]{4}$"
             validphone = re.search(pregex, content['phonenumber'])
             if validphone: 
                 phonenumber = content['phonenumber']
             else: 
+                db.session.rollback()
                 return make_response({'error': 'Please enter a valid phone number'}, 400)
             
             gender = Gender.FEMALE if content['gender'].lower() == "female" else Gender.MALE #get gender. Add non-binary too just in case      
@@ -181,13 +184,15 @@ def register():
             if usertype == 'Patient':
                 caregiver = None
                 if Patients.query.filter_by(username = username).first() is not None:#check if their username has been taken already
+                    db.session.rollback()
                     return make_response({'error': 'Username already exists'}, 400)
                 
                 if Patients.query.filter_by(name = name).first() is not None: #check the user exists
+                    db.session.rollback()
                     return make_response({'error': 'User is already registered.'}, 400) # redirect them to login screen
                 else:
                     weight = int(content['weight']) # get weight
-                    height = int(content['height'])
+                    height = float(content['height'])
                     isSmoker = content['isSmoker'] == "Yes"
                     isDrinker = content['isDrinker'].lower() =="Yes"
                     hasHighBP = content['hasHighBP'] =="Yes"
@@ -212,13 +217,16 @@ def register():
                 caregivertype = CaregiverType.DOCTOR if usertype == "Doctor" else CaregiverType.NURSE
                 
                 if Caregivers.query.filter_by(username = username).first():#check if their username has been taken already
+                    db.session.rollback()
                     return make_response({'error': 'Username already exists'}, 400)
                 
                 if Caregivers.query.filter_by(name = name).first(): #check the user exists
+                    db.session.rollback()
                     return make_response({'error': 'User is already registered.'}, 400) # redirect them to login screen
                 else:
                     files = request.files.getlist("file") 
                     if usertype =="Doctor" and len(files)<2:
+                        db.session.rollback()
                         return make_response({'error': 'Please upload a copy of both your MBBS degree certificate and your Medical License'}, 400)
                     else: 
                         caregiver= Caregivers.query.filter_by(name=name).first() is None
@@ -240,9 +248,11 @@ def register():
                 if usertype =="Family Member":
                     caregivertype = CaregiverType.FAMILY
                     if Caregivers.query.filter_by(username = username).first():#check if their username has been taken already
+                        db.session.rollback()
                         return make_response({'error': 'Username already exists'}, 400)
                 
                     if Caregivers.query.filter_by(name = name).first(): #check the user exists
+                        db.session.rollback()
                         return make_response({'error': 'User is already registered.'}, 400) # redirect them to login screen
                     else:
                         caregiver = Caregivers(name, username,caregivertype , age, dob, email, password, phonenumber, gender, consentForData)
@@ -265,9 +275,9 @@ def register():
 # def load_user(user_id):
 #     return Patients.query.get(int(user_id))
 
-def logout():
-    logout_user()
-    return make_response({'success': 'User was logged out successfully.'},400)
+# def logout():
+#     logout_user()
+#     return make_response({'success': 'User was logged out successfully.'},400)
 
 @app.route("/recordBloodSugar/<pid>", methods=['POST','GET']) # patient personally adds their recordBloodSugar Levels
 @login_required
@@ -276,29 +286,32 @@ def recordBloodSugar(pid):
     if request.method =="POST":
         try: 
             content = request.get_json()
-            bloodSugarLevel = content['bloodSugarLevel']
+            bloodSugarLevel = int(content['bloodSugarLevel'])
             unit = content['unit']
             dateAndTimeRecorded = content['dateAndTimeRecorded']
             dateAndTimeRecorded = datetime.strptime(dateAndTimeRecorded, "%m/%d/%Y %H:%M").date()
             notes = content['notes']
-            creator = content['creator']
-            patient= Patients.query.filter_by(pid=pid).first() is not None
+            creator = current_user.name
+            print(creator)
+            patient= Patients.query.filter_by(pid=pid).first()
             isCreatorReal = (Patients.query.filter_by(name=creator).first() is not None) or (Caregivers.query.filter_by(name=creator).first() is not None) 
             if isCreatorReal:
                 if patient: 
-                    hrid = Patients.query.filter_by(pid=pid).first().get_hrid()
+                    hrid =HealthRecord.query.filter_by(patient_id=pid).first().hrid
                     bloodsugarlevel = BloodSugarLevels(int(bloodSugarLevel), unit, dateAndTimeRecorded, pid, hrid, notes, creator)
                     db.session.add(bloodsugarlevel)
                     db.session.commit() #Modify this to allow it to update the Health record
                     return make_response({'success': 'Blood Sugar Level Recorded Successfully'},201)
+                db.session.rollback()
                 return make_response({'error': 'Patient does not exist'},400)
+            db.session.rollback()
             return make_response({'error': 'The user attempting to create the blood pressure record does not exist.'},400)
         except Exception as e:
             db.session.rollback()
             print(e)
             return make_response({'error': 'An error has occurred'},400)
      
-@app.route("/recordBloodPressure/<pid>", methods=['POST']) # patient personally adds their recordBloodSugar Levels
+@app.route("/recordBloodPressure/<pid>", methods=['POST', 'GET']) # patient personally adds their recordBloodSugar Levels
 @login_required
 @patient_or_caregiver_required
 def recordBloodPressure(pid):
@@ -310,16 +323,18 @@ def recordBloodPressure(pid):
             dateAndTimeRecorded = content['dateAndTimeRecorded']
             dateAndTimeRecorded = datetime.strptime(dateAndTimeRecorded, "%m/%d/%Y %H:%M").date()
             notes = content['notes']
-            creator = content['creator']
-            patient= Patients.query.filter_by(pid=pid).first() is not None
+            creator = current_user.name
+            patient= Patients.query.filter_by(pid=pid).first()
             isCreatorReal = (Patients.query.filter_by(name=creator).first() is not None) or (Caregivers.query.filter_by(name=creator).first() is not None) 
             if isCreatorReal:
                 if patient: 
-                    hrid = Patients.query.filter_by(pid=pid).first().get_hrid()
+                    hrid = HealthRecord.query.filter_by(patient_id=pid).first().hrid
+                    print(hrid)
                     bloodpressurelevel = BloodPressureLevels(int(bloodPressureLevel), unit, dateAndTimeRecorded,creator,pid, hrid, notes)
                     db.session.add(bloodpressurelevel)
                     db.session.commit() #Modify this to allow it to update the Health record
                     return make_response({'success': 'Blood Pressure Level Recorded Successfully'},201)
+                db.session.rollback()
                 return make_response({'error': 'Patient does not exist'},400)
             return make_response({'error': 'The user attempting to create the blood pressure record does not exist.'},400)
         except Exception as e: 
@@ -337,24 +352,31 @@ def createMedicationReminder(pid):
             name = content['name']
             unit = content['unit']
             recommendedFrequency = int(content['recommendedFrequency'])
+            frequencyUnit = content["frequencyUnit"]
             dosage = content['dosage']
             inventory = content['inventory']
-            creator = current_user
+            creator = current_user.name
+            print(creator)
             patient= Patients.query.filter_by(pid=pid).first() is not None
             isCreatorReal = (Patients.query.filter_by(name=creator).first() is not None) or (Caregivers.query.filter_by(name=creator).first() is not None) 
             if isCreatorReal:
                 if patient:
                     patient =Patients.query.filter_by(pid=pid).first()
-                    medication = Medication(name, unit, recommendedFrequency, dosage,inventory, pid, creator, creator)
-                    db.session.add(medication)
-                    db.session.commit() 
-                    for i in range(recommendedFrequency):
-                        time = content['time']
-                        time = datetime.strptime(time, '%I:%M %p')
-                        alrt=Alert("Hi "+patient.username+"! It's "+ content['time']+ ". Time to take your "+ medication.name + " medication.", AlertType.MEDICATION, time, pid, medication.mid)
-                        db.session.add(alrt)
-                        db.session.commit()
-                    return make_response({'success': 'Medication reminder has been created successfully'},200)
+                    if Medication.query.filter_by(name=name) is None:
+                        medication = Medication(name, unit, recommendedFrequency, dosage,inventory, pid, creator, creator)
+                        db.session.add(medication)
+                        db.session.commit() 
+                        for i in range(recommendedFrequency):
+                            timekey = 'time' + str(i)
+                            time = content[('timekey')]
+                            time = datetime.strptime(time, '%I:%M %p')
+                            alrt=Alert("Hi "+patient.username+"! It's "+ content['time']+ ". Time to take your "+ medication.name + " medication.", AlertType.MEDICATION, time, pid, medication.mid)
+                            db.session.add(alrt)
+                            db.session.commit()
+                        return make_response({'success': 'Medication reminder has been created successfully'},200)
+                    else:
+                        return make_response({'error': 'Medication Reminder already exist. Would you like to edit your existing medication instead?'},400)
+                        
                 return make_response({'error': 'Patient does not exist'},400)
             return make_response({'error': 'The user attempting to create the medication reminder does not exist.'},400)
         except Exception as e: 
@@ -441,7 +463,7 @@ def deleteMedicationReminder(mid):
             print(e)
             return make_response({'error': 'An error has occurred.'},400)
 
-
+@app.route()
 # convert food
 # api_url = 'https://api.calorieninjas.com/v1/nutrition?query='
 # query = '3lb carrots and a chicken sandwich'

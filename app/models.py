@@ -31,7 +31,21 @@ class AlertType(Enum):
     EAT_MEAL = "Remember to eat"
     TOO_MUCH_SALT = "You are consuming too much sodium"
     TOO_MUCH_SUGAR = "You are consuming too much sugar/carbs"
+
+class MealType(Enum):
+    BEVERAGE = "beverage"
+    BREAKFAST = "breakfast"
+    LUNCH = "lunch"
+    DINNER = "dinner"
+    BRUNCH = "brunch"
+    SNACK ="snack"
+    DESSERT = "dessert"
     
+class FoodOrDrink(Enum):
+    Food = "food"
+    DRINK = "drink"
+    FOODANDDRINK = "foodanddrink"
+        
 
 class Patients(db.Model):
     __tablename__ = 'patients'
@@ -98,7 +112,7 @@ class HealthRecord(db.Model): #add activity level
     hrid= db.Column(db.Integer, primary_key=True, autoincrement=True)
     weight = db.Column(db.Integer)
     weightUnits = db.Column(db.String(50))
-    height = db.Column(db.Integer)
+    height = db.Column(db.Float)
     heightUnits = db.Column(db.String(50))
     isSmoker = db.Column(db.Boolean, default = False)
     isDrinker = db.Column(db.Boolean, default = False)
@@ -302,19 +316,22 @@ class Medication(db.Model):
     name = db.Column(db.String(256))
     unit = db.Column(db.String(256))
     recommendedFrequency = db.Column(db.Integer)
-    dosage = db.Column(db.Integer)
+    frequencyUnit = db.Column(db.String(100))
+    amount = db.Column(db.Integer)
+    dosage = db.Column(db.String(150))
     inventory = db.Column(db.Integer)
     pid = db.Column(db.Integer, db.ForeignKey('patients.pid'))
     creator = db.Column(db.String(256))
     created_at = db.Column(db.DateTime, default=datetime.now)
     lastupdated_by = db.Column(db.String(256), nullable = True)
     alerts = db.relationship('Alert', backref='medication', lazy =True)
-    audits = db.relationship('Audit', backref='medication', lazy=True)
+    audits = db.relationship('MedicationAudit', backref='medication', lazy=True)
     
-    def __init__(self, name, unit, recommendedFrequency, dosage, inventory, pid, creator, last_updated_by):
+    def __init__(self, name, unit, recommendedFrequency, frequencyUnit,dosage, inventory, pid, creator, last_updated_by):
         self.name = name
         self.unit = unit
         self.recommendedFrequency = recommendedFrequency
+        self.frequencyUnit = frequencyUnit
         self.dosage = dosage
         self.inventory = inventory
         self.pid = pid
@@ -341,7 +358,7 @@ class Alert(db.Model):
     aid = db.Column(db.Integer, primary_key=True, autoincrement=True)
     msg = db.Column(db.String(256))
     type = db.Column(db.Enum(AlertType))
-    date_time = db.Column(db.DateTime)
+    date_time = db.Column(db.Time)
     pid = db.Column(db.Integer, db.ForeignKey('patients.pid'))
     mid = db.Column(db.Integer, db.ForeignKey('medication.mid'), nullable = True)
     
@@ -351,3 +368,12 @@ class Alert(db.Model):
         self.datetime = date_time
         self.pid = pid
         self.mid = mid
+        
+class MealEntry(db.Model):
+    portiontype = db.Column(db.String(250))
+    servingSize = db.Column(db.Integer)
+    date_and_time = db.Column(db.DateTime)
+    mealttype = db.Column(db.Enum(MealType))
+    mealOrDrink = db.Column(db.Enum(FoodOrDrink))
+    
+    
