@@ -370,10 +370,29 @@ class Alert(db.Model):
         self.mid = mid
         
 class MealEntry(db.Model):
+    __tablename__ = "mealentry"
+    meid= db.Column(db.Integer, primary_key=True, autoincrement=True)
     portiontype = db.Column(db.String(250))
     servingSize = db.Column(db.Integer)
     date_and_time = db.Column(db.DateTime)
     mealttype = db.Column(db.Enum(MealType))
     mealOrDrink = db.Column(db.Enum(FoodOrDrink))
+    meal = db.Column(db.String(250))
+    nutrients_id = db.Column(db.Integer, db.ForeignKey('nutrients.nid'))
+
+class Nutrients(db.Model):
+    __tablename__ = "nutrients"
+    nid = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    sugar_in_g = db.Column(db.Float)
+    protein_in_g = db.Column(db.Float)
+    sodium_in_mg = db.Column(db.Float)
+    calories = db.Column(db.Float)
+    fat_total_g = db.Column(db.Float)
+    fat_saturated_g = db.Column(db.Float)
+    potassium_mg = db.Column(db.Float)
+    cholesterol_mg = db.Column(db.Float)
+    carbohydrates_total_g = db.Column(db.Float)
+
+class MealDiary(db.Model):
     
     
