@@ -542,23 +542,23 @@ def createMealEntry(pid):
             return make_response({'error': 'An error has occurred.'},400)
    
 
-@app.route("/editMealEntry/<pid>", methods = ['PUT'])
-@login_required
-@patient_or_caregiver_required
-def createMealEntry(pid):    
-    if request.method =="PUT":
-        try:
+# @app.route("/editMealEntry/<pid>", methods = ['PUT'])
+# @login_required
+# @patient_or_caregiver_required
+# def createMealEntry(pid):    
+#     if request.method =="PUT":
+#         try:
             
-        except Exception as e: 
-            db.session.rollback()
-            print(e)
-            return make_response({'error': 'An error has occurred.'},400)     
+#         except Exception as e: 
+#             db.session.rollback()
+#             print(e)
+#             return make_response({'error': 'An error has occurred.'},400)     
  
 
 @app.route("/getAllMealEntries/<pid>", methods = ['GET'])
 @login_required
 @patient_or_caregiver_required
-def createMealEntry(pid):    
+def getMealEntries(pid):    
     if request.method =="GET":
         try:
             if request.method =="GET":

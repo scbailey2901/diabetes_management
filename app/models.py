@@ -123,7 +123,7 @@ class HealthRecord(db.Model): #add activity level
     weightUnits = db.Column(db.String(50))
     height = db.Column(db.Float)
     heightUnits = db.Column(db.String(50))
-    diabetesType = db.Column(Enum(DiabetesType))
+    diabetesType = db.Column(db.Enum(DiabetesType))
     isSmoker = db.Column(db.Boolean, default = False)
     isDrinker = db.Column(db.Boolean, default = False)
     hasHighBP = db.Column(db.Boolean, default = False)
@@ -445,13 +445,13 @@ class MealDiary(db.Model):
     __tablename__ = "mealDiary"
     mdid = db.Column(db.Integer, primary_key=True, autoincrement=True)
     pid = db.Column(db.Integer, db.ForeignKey('patients.pid'))
-    breakfasts = db.relationship('MealEntry', primary_join="and_(MealEntry.mealdiaryid==MealDiary.mdid, MealEntry.mealtype == BREAKFAST",order_by="desc(MealEntry.date_and_time)",lazy = True)
-    lunches = db.relationship('MealEntry', primary_join="and_(MealEntry.mealdiaryid==MealDiary.mdid, MealEntry.mealtype == LUNCH)",order_by="desc(MealEntry.date_and_time)",lazy = True)
-    dinners = db.relationship('MealEntry', primary_join="and_(MealEntry.mealdiaryid==MealDiary.mdid, MealEntry.mealtype == DINNER)",order_by="desc(MealEntry.date_and_time)",lazy = True)
-    desserts = db.relationship('MealEntry', primary_join="and_(MealEntry.mealdiaryid==MealDiary.mdid, MealEntry.mealtype == DESSERT)",order_by="desc(MealEntry.date_and_time)",lazy = True)
-    brunches= db.relationship('MealEntry', primary_join="and_(MealEntry.mealdiaryid==MealDiary.mdid, MealEntry.mealtype == BRUNCH)",order_by="desc(MealEntry.date_and_time)",lazy = True)
-    snacks = db.relationship('MealEntry', primary_join="and_(MealEntry.mealdiaryid==MealDiary.mdid, MealEntry.mealtype == SNACK)",order_by="desc(MealEntry.date_and_time)",lazy = True)
-    allMeals = db.relationship('MealEntry', primary_join="and_(MealEntry.mealdiaryid==MealDiary.mdid)",order_by="desc(MealEntry.date_and_time)",lazy = True)
+    breakfasts = db.relationship('MealEntry', primaryjoin="and_(MealEntry.mealdiaryid==MealDiary.mdid, MealEntry.mealtype == MealType.BREAKFAST",order_by="desc(MealEntry.date_and_time)",lazy = True)
+    lunches = db.relationship('MealEntry', primaryjoin="and_(MealEntry.mealdiaryid==MealDiary.mdid, MealEntry.mealtype == MealType.LUNCH)",order_by="desc(MealEntry.date_and_time)",lazy = True)
+    dinners = db.relationship('MealEntry', primaryjoin="and_(MealEntry.mealdiaryid==MealDiary.mdid, MealEntry.mealtype == MealType.DINNER)",order_by="desc(MealEntry.date_and_time)",lazy = True)
+    desserts = db.relationship('MealEntry', primaryjoin="and_(MealEntry.mealdiaryid==MealDiary.mdid, MealEntry.mealtype == MealType.DESSERT)",order_by="desc(MealEntry.date_and_time)",lazy = True)
+    brunches= db.relationship('MealEntry', primaryjoin="and_(MealEntry.mealdiaryid==MealDiary.mdid, MealEntry.mealtype == MealType.BRUNCH)",order_by="desc(MealEntry.date_and_time)",lazy = True)
+    snacks = db.relationship('MealEntry', primaryjoin="and_(MealEntry.mealdiaryid==MealDiary.mdid, MealEntry.mealtype == MealType.SNACK)",order_by="desc(MealEntry.date_and_time)",lazy = True)
+    allMeals = db.relationship('MealEntry', primaryjoin="and_(MealEntry.mealdiaryid==MealDiary.mdid)",order_by="desc(MealEntry.date_and_time)",lazy = True)
     
     def __init__(self, pid):
         self.pid = pid
