@@ -62,6 +62,7 @@ class Patients(db.Model):
     joined_on = db.Column(db.DateTime, default=datetime.now())
     caregivers = db.relationship('Caregivers', secondary=patient_caregiver, back_populates='patients')
     health_records = db.relationship('HealthRecord', backref='patient', lazy=True)
+    mealdiary = db.relationship('MealDiary', backref='patient', lazy=True)
 
 
     def __init__(self, age, dob, email,consentForData, name, username, password, phonenumber, gender):
@@ -375,11 +376,23 @@ class MealEntry(db.Model):
     portiontype = db.Column(db.String(250))
     servingSize = db.Column(db.Integer)
     date_and_time = db.Column(db.DateTime)
-    mealttype = db.Column(db.Enum(MealType))
+    mealtype = db.Column(db.Enum(MealType))
     mealOrDrink = db.Column(db.Enum(FoodOrDrink))
     meal = db.Column(db.String(250))
+    pid = db.Column(db.Integer, db.ForeignKey('patients.pid'))
     nutrients_id = db.Column(db.Integer, db.ForeignKey('nutrients.nid'))
-
+    mealdiaryid = db.Column(db.Integer, db.ForeignKey('mealDiary.mdid'))
+    
+    def __init__(self, portiontype, servingSize, date_and_time, mealtype, mealOrDrink, meal, pid, nutrients_id):
+        self.portiontype = portiontype
+        self.servingSize = servingSize
+        self.date_and_time = date_and_time
+        self.mealtype = mealtype
+        self.mealOrDrink = mealOrDrink
+        self.meal = meal 
+        self.pid = pid
+        self.nutrients_id = nutrients_id
+    
 class Nutrients(db.Model):
     __tablename__ = "nutrients"
     nid = db.Column(db.Integer, primary_key=True, autoincrement=True)
@@ -392,7 +405,30 @@ class Nutrients(db.Model):
     potassium_mg = db.Column(db.Float)
     cholesterol_mg = db.Column(db.Float)
     carbohydrates_total_g = db.Column(db.Float)
-
+    mealentry = db.relationship('MealEntry', backref='nutrients', lazy=True)
+    
+    def __init__(self, sugar_in_g, protein_in_g, sodium_in_mg, calories, fat_total_g, fat_saturated_g, potassium_mg, cholesterol_mg, carbohydrates_total_g):
+        self.sugar_in_g = sugar_in_g
+        self.protein_in_g = protein_in_g
+        self.sodium_in_mg = sodium_in_mg
+        self.calories = calories
+        self.fat_total_g = fat_total_g
+        self.fat_saturated_g = fat_saturated_g
+        self.potassium_mg = potassium_mg
+        self.cholesterol_mg = cholesterol_mg
+        self.carbohydrates_total_g = carbohydrates_total_g
+        
 class MealDiary(db.Model):
+    __tablename__ = "mealDiary"
+    mdid = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    pid = db.Column(db.Integer, db.ForeignKey('patients.pid'))
+    breakfasts = db.relationship('MealEntry', primary_join="and_(MealEntry.mealdiaryid==MealDiary.mdid, MealEntry.mealtype == BREAKFAST",order_by="desc(MealEntry.date_and_time)",lazy = True)
+    lunches = db.relationship('MealEntry', primary_join="and_(MealEntry.mealdiaryid==MealDiary.mdid, MealEntry.mealtype == LUNCH)",order_by="desc(MealEntry.date_and_time)",lazy = True)
+    dinners = db.relationship('MealEntry', primary_join="and_(MealEntry.mealdiaryid==MealDiary.mdid, MealEntry.mealtype == DINNER)",order_by="desc(MealEntry.date_and_time)",lazy = True)
+    desserts = db.relationship('MealEntry', primary_join="and_(MealEntry.mealdiaryid==MealDiary.mdid, MealEntry.mealtype == DESSERT)",order_by="desc(MealEntry.date_and_time)",lazy = True)
+    brunches= db.relationship('MealEntry', primary_join="and_(MealEntry.mealdiaryid==MealDiary.mdid, MealEntry.mealtype == BRUNCH)",order_by="desc(MealEntry.date_and_time)",lazy = True)
+    snacks = db.relationship('MealEntry', primary_join="and_(MealEntry.mealdiaryid==MealDiary.mdid, MealEntry.mealtype == SNACK)",order_by="desc(MealEntry.date_and_time)",lazy = True)
+    allMeals = db.relationship('MealEntry', primary_join="and_(MealEntry.mealdiaryid==MealDiary.mdid)",order_by="desc(MealEntry.date_and_time)",lazy = True)
     
-    
+    def __init__(self, pid):
+        self.pid = pid

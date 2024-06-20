@@ -3,6 +3,7 @@ from app import app
 from flask import render_template,make_response, redirect, request, url_for, flash, send_from_directory, Flask
 import pickle
 from flask import g
+import requests
 from flask import jsonify, send_file,  flash, session, abort
 import os
 import json
@@ -16,7 +17,7 @@ from flask_wtf.csrf import generate_csrf
 from werkzeug.utils import secure_filename
 from dotenv import load_dotenv
 import re
-from app.models import Patients, Caregivers, BloodSugarLevels, Credentials, HealthRecord, CaregiverType, Gender, CredentialType, AlertType, Alert
+from app.models import Patients, Caregivers, BloodSugarLevels, Credentials, HealthRecord, CaregiverType, Gender, CredentialType, AlertType, Alert, Medication, MedicationAudit, MealDiary, MealEntry, MealType, Nutrients, FoodOrDrink
 from flask_migrate import Migrate
 
     
@@ -263,22 +264,6 @@ def register():
             print(e)
             return make_response({'error': 'An error has occurred'},400)
 
-    
-# def get_current_user(user_id):
-#     user = Patients.query.get(user_id)
-#     if not user:
-#         return jsonify({'error': 'User not found'}), 404
-#     return user
-
-
-# @login_manager.user_loader
-# def load_user(user_id):
-#     return Patients.query.get(int(user_id))
-
-# def logout():
-#     logout_user()
-#     return make_response({'success': 'User was logged out successfully.'},400)
-
 @app.route("/recordBloodSugar/<pid>", methods=['POST','GET']) # patient personally adds their recordBloodSugar Levels
 @login_required
 @patient_or_caregiver_required
@@ -375,8 +360,7 @@ def createMedicationReminder(pid):
                             db.session.commit()
                         return make_response({'success': 'Medication reminder has been created successfully'},200)
                     else:
-                        return make_response({'error': 'Medication Reminder already exist. Would you like to edit your existing medication instead?'},400)
-                        
+                        return make_response({'error': 'Medication Reminder already exist. Would you like to edit your existing medication instead?'},400)  
                 return make_response({'error': 'Patient does not exist'},400)
             return make_response({'error': 'The user attempting to create the medication reminder does not exist.'},400)
         except Exception as e: 
@@ -432,7 +416,7 @@ def viewMedicationReminder(pid):
                         medicationlist.append(meds)
                     return jsonify(status = "success", medicationlist = medicationlist), 200
                 return make_response({'error': 'Medication reminder does not exist.'}, 400)
-            return make_response({'error': 'Patien t does not exist.'},400)
+            return make_response({'error': 'Patient does not exist.'},400)
     except Exception as e: 
             db.session.rollback()
             print(e)
@@ -463,33 +447,121 @@ def deleteMedicationReminder(mid):
             print(e)
             return make_response({'error': 'An error has occurred.'},400)
 
-@app.route()
-# convert food
-# api_url = 'https://api.calorieninjas.com/v1/nutrition?query='
-# query = '3lb carrots and a chicken sandwich'
-# response = requests.get(api_url + query, headers={'X-Api-Key': 'UdjAYE21RFKdvFnrUhM25g==xL6FYYElHVpuQrAJ'})
-# if response.status_code == requests.codes.ok:
-#     print(response.text)
-# else:
-#     print("Error:", response.status_code, response.text)
-# username = data.username.data
-#             password = data.password.data
-#             timestamp= datetime.utcnow()
-#             expiry_date= timestamp+timedelta(days=7)
-#             user = Users.query.filter_by(username=username).first()
-#             print(user)
-#             if user is not None and check_password_hash(user.password, password):
-#                 payload = {'sub': user.id, "iat":timestamp, "exp": expiry_date}
-                
-#                 token = jwt.encode(payload, app.config['SECRET_KEY'], algorithm = 'HS256')
-#                 if login_user(user):
-#                     load_user(user.id)
-#                 return jsonify(status='success', message = 'User successfully logged in.', id=user.id, token=token)
-#             return jsonify(errors="Invalid username or password")
-#         except Exception as e:
-#             print(e)
-#             return jsonify(errors='An error occurred while processing your request'), 500
-#     return jsonify(errors='Invalid request method'), 405
+@app.route("/createMealEntry/<pid>", methods = ['POST'])
+@login_required
+@patient_or_caregiver_required
+def createMealEntry(pid):
+     if request.method =="POST":
+        try:
+            content = request.get_json()
+            portiontype = content["portiontype"]
+            servingSize = content['servingSize']
+            date_and_time = content['date_and_time']
+            if content['mealtype'].lower() == "beverage":
+                mealtype = MealType.BEVERAGE 
+            elif content['mealtype'].lower() == "breakfast":
+                mealtype = MealType.BREAKFAST
+            elif content['mealtype'].lower() == "lunch":
+                mealtype = MealType.LUNCH
+            elif content['mealtype'].lower() == "brunch":
+                mealtype = MealType.BRUNCH
+            elif content['mealtype'].lower() == "snack":
+                mealtype = MealType.SNACK
+            elif content['mealtype'].lower() == "dessert":
+                mealtype = MealType.DESSERT
+
+            if content['mealOrDrink'].lower() == "food":
+                mealOrDrink = FoodOrDrink.Food
+            elif content['mealOrDrink'].lower() == "drink":
+                mealOrDrink = FoodOrDrink.DRINK
+            else:
+                mealOrDrink = FoodOrDrink.FOODANDDRINK
+            
+            meal = content['meal']
+            creator = current_user.name
+            print(creator)
+            patient= Patients.query.filter_by(pid=pid).first() is not None
+            isCreatorReal = (Patients.query.filter_by(name=creator).first() is not None) or (Caregivers.query.filter_by(name=creator).first() is not None) 
+            if isCreatorReal and patient:
+                patient =Patients.query.filter_by(pid=pid).first()
+                api_url = 'https://api.calorieninjas.com/v1/nutrition?query='
+                query = servingSize+ " "+ portiontype + " " + meal 
+                response = requests.get(api_url + query, headers={'X-Api-Key': 'UdjAYE21RFKdvFnrUhM25g==xL6FYYElHVpuQrAJ'})
+                if response.status_code == requests.codes.ok:
+                    print(response.text)
+                    nutrients_data = response.json().get('items', [])[0]
+                    sugar_in_g = nutrients_data['sugar_g']
+                    protein_in_g = nutrients_data['protein_in_g']
+                    sodium_in_mg = nutrients_data['sodium_in_mg']
+                    calories = nutrients_data['calories']
+                    fat_total_g = nutrients_data['fat_total_g']
+                    fat_saturated_g = nutrients_data['fat_saturated_g']
+                    potassium_mg = nutrients_data['potassium_mg']
+                    cholesterol_mg = nutrients_data['cholesterol_mg']
+                    carbohydrates_total_g = nutrients_data['carbohydrates_total_g']
+                    nutrients = Nutrients(sugar_in_g, protein_in_g,sodium_in_mg, calories,fat_total_g,fat_saturated_g, potassium_mg, cholesterol_mg, carbohydrates_total_g )
+                    db.session.add(nutrients)
+                    db.session.commit()
+                    mealentry= MealEntry(portiontype,servingSize,date_and_time,mealtype,mealOrDrink,meal,pid,nutrients.nid)
+                    db.session.add(mealentry)
+                    db.session.commit()
+                    mealDiary = MealDiary(pid)
+                    db.session.add(mealDiary)
+                    db.session.commit()
+                else: 
+                    return make_response({'error': response.text},response.status_code)
+            elif isCreatorReal is None:
+                db.session.rollback()
+                return make_response({'error': 'The user attempting to create the medication reminder does not exist.'},400)
+            elif patient is None:
+                db.session.rollback()
+                return make_response({'error': 'Patient does not exist'},400)
+        except Exception as e: 
+            db.session.rollback()
+            print(e)
+            return make_response({'error': 'An error has occurred.'},400)
+   
+
+@app.route("/editMealEntry/<pid>", methods = ['PUT'])
+@login_required
+@patient_or_caregiver_required
+def createMealEntry(pid):    
+    if request.method =="PUT":
+        try:
+            
+        except Exception as e: 
+            db.session.rollback()
+            print(e)
+            return make_response({'error': 'An error has occurred.'},400)     
+ 
+
+@app.route("/getAllMealEntries/<pid>", methods = ['GET'])
+@login_required
+@patient_or_caregiver_required
+def createMealEntry(pid):    
+    if request.method =="GET":
+        try:
+            if request.method =="GET":
+                patient= Patients.query.filter_by(pid=pid).first()
+                mealDiary = MealDiary.query.filter_by(pid=pid).first()
+                if patient != None and mealDiary != None:
+                    allmealentries = MealEntry.query.filter_by(mealdiaryid=mealDiary.mdid).order_by(MealEntry.date_and_time.desc()).all()
+                    if allmealentries != None:
+                        meallist=[]
+                        for meal in allmealentries:
+                            nutrients = Nutrients.query.filter_by(nid=meal.nutrients_id)
+                            mealent = {"portiontype": meal.portiontype, "servingSize": meal.servingSize, "date_and_time":meal.date_and_time, "mealtype": meal.mealtype, "mealOrDrink": meal.mealOrDrink, "meal": meal.meal, "patient_id": meal.pid,"nutrients_id":meal.nutrients_id,"sugar_in_g":nutrients.sugar_in_g,"protein_in_g": nutrients.protein_in_g, "sodium_in_mg": nutrients.sodium_in_mg, "calories":nutrients.calories, "fat_total_g": nutrients.fat_total_g, "fat_saturated_g": nutrients.fat_saturated_g, "potassium_mg": nutrients.potassium_mg, "cholesterol_mg": nutrients.cholesterol_mg,"carbohydrates_total_g": nutrients.carbohydrates_total_g}
+                            meallist.append(mealent)
+                elif patient == None:
+                    return make_response({'error': 'Patient does not exist'},400)
+                elif mealDiary == None:
+                    return make_response({'error': 'Meal Diary does exist for this user'},400)
+
+        except Exception as e: 
+            db.session.rollback()
+            print(e)
+            return make_response({'error': 'An error has occurred.'},400)    
+
 
 
 
