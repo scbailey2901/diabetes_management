@@ -45,7 +45,15 @@ class FoodOrDrink(Enum):
     Food = "food"
     DRINK = "drink"
     FOODANDDRINK = "foodanddrink"
-        
+    
+class DiabetesType(Enum):
+    TYPEONE = "typeone"
+    TYPETWO = "typetwo"
+
+class RecTime(Enum):
+    AFTERMEAL ="aftermeal"
+    BEFOREMEAL = "beforemeal"
+    
 
 class Patients(db.Model):
     __tablename__ = 'patients'
@@ -115,6 +123,7 @@ class HealthRecord(db.Model): #add activity level
     weightUnits = db.Column(db.String(50))
     height = db.Column(db.Float)
     heightUnits = db.Column(db.String(50))
+    diabetesType = db.Column(Enum(DiabetesType))
     isSmoker = db.Column(db.Boolean, default = False)
     isDrinker = db.Column(db.Boolean, default = False)
     hasHighBP = db.Column(db.Boolean, default = False)
@@ -127,12 +136,13 @@ class HealthRecord(db.Model): #add activity level
     bloodPressurelevels = db.relationship('BloodPressureLevels', backref='healthrecord', lazy = True)
     patient_id = db.Column(db.Integer, db.ForeignKey('patients.pid'))
     
-    def __init__(self, age, weight,weightUnits, height, heightUnits,isSmoker, isDrinker, hasHighBP, hasHighChol, hasHeartDisease, hadHeartAttack, hadStroke,hasTroubleWalking,bloodSugarlevels,bloodPressurelevels,patient_id ):
+    def __init__(self, age, weight,weightUnits, height, heightUnits,diabetesType,isSmoker, isDrinker, hasHighBP, hasHighChol, hasHeartDisease, hadHeartAttack, hadStroke,hasTroubleWalking,bloodSugarlevels,bloodPressurelevels,patient_id ):
         self.age = age
         self.weight = weight
         self.weightUnits = weightUnits
         self.heightUnits = heightUnits
         self.height = height
+        self.diabetesType = diabetesType
         self.isSmoker = isSmoker
         self.isDrinker = isDrinker
         self.hasHighBP = hasHighBP
@@ -317,23 +327,25 @@ class Medication(db.Model):
     name = db.Column(db.String(256))
     unit = db.Column(db.String(256))
     recommendedFrequency = db.Column(db.Integer)
-    frequencyUnit = db.Column(db.String(100))
+    recommendedTime = db.Column(db.Enum(RecTime))
     amount = db.Column(db.Integer)
-    dosage = db.Column(db.String(150))
+    # dosage = db.Column(db.String(150))
     inventory = db.Column(db.Integer)
     pid = db.Column(db.Integer, db.ForeignKey('patients.pid'))
     creator = db.Column(db.String(256))
     created_at = db.Column(db.DateTime, default=datetime.now)
     lastupdated_by = db.Column(db.String(256), nullable = True)
+    reminderTimes = db.relationship('Time', backref='medication', lazy =True)
     alerts = db.relationship('Alert', backref='medication', lazy =True)
     audits = db.relationship('MedicationAudit', backref='medication', lazy=True)
     
-    def __init__(self, name, unit, recommendedFrequency, frequencyUnit,dosage, inventory, pid, creator, last_updated_by):
+    def __init__(self, name, unit, recommendedFrequency, recommendedTime, amount, inventory, pid, creator, last_updated_by):
         self.name = name
         self.unit = unit
         self.recommendedFrequency = recommendedFrequency
-        self.frequencyUnit = frequencyUnit
-        self.dosage = dosage
+        self.recommendedTime = recommendedTime
+        self.amount = amount
+        # self.dosage = dosage
         self.inventory = inventory
         self.pid = pid
         self.creator = creator
@@ -342,6 +354,17 @@ class Medication(db.Model):
     def get_id(self):
         return str(self.mid)  
 
+
+class MedicationTime(db.Model):
+    __tablename__ = "medtime"
+    mtid = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    time = db.Column(db.Time)
+    mid = db.Column(db.Integer, db.ForeignKey('medication.mid'))
+    
+    def __init__(self, time, mid):
+        self.time = time
+        self.mid = mid
+    
 class MedicationAudit(db.Model):
     __tablename__ = "medicationaudit"
     auid= db.Column(db.Integer, primary_key=True, autoincrement=True)

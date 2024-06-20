@@ -1,6 +1,7 @@
 import os
 from app import app
 from flask import render_template,make_response, redirect, request, url_for, flash, send_from_directory, Flask
+from apscheduler.schedulers.background import BackgroundScheduler  
 import pickle
 from flask import g
 import requests
@@ -17,7 +18,7 @@ from flask_wtf.csrf import generate_csrf
 from werkzeug.utils import secure_filename
 from dotenv import load_dotenv
 import re
-from app.models import Patients, Caregivers, BloodSugarLevels, Credentials, HealthRecord, CaregiverType, Gender, CredentialType, AlertType, Alert, Medication, MedicationAudit, MealDiary, MealEntry, MealType, Nutrients, FoodOrDrink
+from app.models import Patients, Caregivers, BloodSugarLevels, Credentials, HealthRecord, CaregiverType, Gender, CredentialType, AlertType, Alert, Medication, MedicationAudit, MealDiary, MealEntry, MealType, Nutrients, FoodOrDrink, DiabetesType, RecTime, MedicationTime
 from flask_migrate import Migrate
 
     
@@ -204,13 +205,14 @@ def register():
                     hadStroke =content['hadStroke'] == "Yes" 
                     weightUnits = content['weightUnits']
                     heightUnits = content['heightUnits']
+                    diabetesType= DiabetesType.TYPEONE if content['diabetesType'].lower() == "typeone" else DiabetesType.TYPETWO
                     # bloodSugarlevels = []
                     # bloodPressurelevels = []
                     patient = Patients(age,dob,email,consentForData, name, username, password,phonenumber, gender)
                     db.session.add(patient)
                     db.session.commit()
                     patient= Patients.query.filter_by(name=name).first()
-                    healthrecord = HealthRecord(age, weight,weightUnits, height, heightUnits, isSmoker, isDrinker, hasHighBP, hasHighChol, hasHeartDisease, hadHeartAttack, hadStroke, hasTroubleWalking, [], [], patient.get_id())
+                    healthrecord = HealthRecord(age, weight,weightUnits, height, heightUnits, diabetesType,isSmoker, isDrinker, hasHighBP, hasHighChol, hasHeartDisease, hadHeartAttack, hadStroke, hasTroubleWalking, [], [], patient.get_id())
                     db.session.add(healthrecord)
                     db.session.commit()
                     return make_response({'success': 'User created successfully'},201)
@@ -336,10 +338,10 @@ def createMedicationReminder(pid):
             content = request.get_json()
             name = content['name']
             unit = content['unit']
-            recommendedFrequency = int(content['recommendedFrequency'])
-            frequencyUnit = content["frequencyUnit"]
-            dosage = content['dosage']
+            recommendedFrequency = int(content['recommendedFrequency']) 
+            recTime =RecTime.BEFOREMEAL if content['recTime'].lower() =="before meals" else RecTime.AFTERMEAL
             inventory = content['inventory']
+            amount= int(content['amount'])
             creator = current_user.name
             print(creator)
             patient= Patients.query.filter_by(pid=pid).first() is not None
@@ -348,16 +350,22 @@ def createMedicationReminder(pid):
                 if patient:
                     patient =Patients.query.filter_by(pid=pid).first()
                     if Medication.query.filter_by(name=name) is None:
-                        medication = Medication(name, unit, recommendedFrequency, dosage,inventory, pid, creator, creator)
+                        medication = Medication(name, unit, recommendedFrequency,recTime,amount,inventory, pid, creator, creator)
                         db.session.add(medication)
                         db.session.commit() 
                         for i in range(recommendedFrequency):
                             timekey = 'time' + str(i)
-                            time = content[('timekey')]
-                            time = datetime.strptime(time, '%I:%M %p')
-                            alrt=Alert("Hi "+patient.username+"! It's "+ content['time']+ ". Time to take your "+ medication.name + " medication.", AlertType.MEDICATION, time, pid, medication.mid)
-                            db.session.add(alrt)
-                            db.session.commit()
+                            time = datetime.strptime(content[(timekey)], '%I:%M %p') if content[(timekey)] != None else "Time value missing"
+                            if time != "Time value missing":
+                                medTime = MedicationTime(time,medication.mid)
+                                db.session.add(medTime)
+                                db.commit()
+                                alrt=Alert("Hi "+patient.username+"! It's "+ content['time']+ ". Time to take your "+ medication.name + " medication.", AlertType.MEDICATION, time, pid, medication.mid)
+                                db.session.add(alrt)
+                                db.session.commit()
+                            else:
+                                db.session.rollback()
+                                return make_response({'error': 'Time value missing'},400)
                         return make_response({'success': 'Medication reminder has been created successfully'},200)
                     else:
                         return make_response({'error': 'Medication Reminder already exist. Would you like to edit your existing medication instead?'},400)  
@@ -382,17 +390,23 @@ def editMedicationReminder(mid):
                 medication.name = content['name'] if content['name'] != None else medication.name
                 medication.unit = content['unit'] if content['unit'] != None else medication.unit
                 medication.recommendedFrequency = content['recommendedFrequency'] if content['recommendedFrequency'] != None else medication.recommendedFrequency
-                medication.dosage = content['dosage'] if content['dosage']  != None else medication.dosage
-                medication.inventory = content['inventory'] if content['inventory'] != None else medication.inventory
+                medication.amount = int(content['amount']) if content['amount']  != None else medication.amount
+                medication.inventory = int(content['inventory']) if content['inventory'] != None else medication.inventory
                 for alert in alerts:
                     db.session.delete(alert)
                     
                 for i in range(medication.recommendedFrequency):
-                            time = content['time'] if content['time'] != None else medication.time
-                            time = datetime.strptime(time, '%I:%M %p')
-                            alrt=Alert("Hi "+patient.username+"! It's "+ content['time']+ ". Time to take your "+ medication.name + " medication.", AlertType.MEDICATION, time, medication.pid, medication.mid)
-                            db.session.add(alrt)
-                            db.session.commit()
+                    timekey = 'time' + str(i)
+                    time = datetime.strptime(content[(timekey)], '%I:%M %p') if content[(timekey)] != None else medication.time
+                    medTime = MedicationTime(time,medication.mid)
+                    db.session.add(medTime)
+                    db.commit()
+                    alrt=Alert("Hi "+patient.username+"! It's "+ content['time']+ ". Time to take your "+ medication.name + " medication.", AlertType.MEDICATION, time, medication.pid, medication.mid)
+                    db.session.add(alrt)
+                    db.session.commit()
+                medAudit = MedicationAudit(mid, current_user.name)
+                db.session.add(medAudit)
+                db.commit()
                 return make_response({'success': 'Medication reminder has been updated successfully'},200)
             return make_response({'error': 'Medication reminder does not exist.'},400)
         except Exception as e: 
@@ -412,7 +426,8 @@ def viewMedicationReminder(pid):
                 if medications != None:
                     medicationlist=[]
                     for med in medications:
-                        meds = {"id":med.mid, "medicationName": med.name, "units": med.unit, "recommendedFrequency": med.recommendedFrequency, "times": [datetime.strftime(med.alert.time, '%I:%M %p') for alert in med.alerts], "dosage": med.dosage, "amountInInventory": med.inventory, "patientID":med.pid, "patientName": patient.name, "creator": med.creator, "created_at": med.created_at, "last_updated_by": med.updated_by }
+                        times  = [datetime.strftime(time, '%I:%M %p') for time in med.reminderTimes]
+                        meds = {"id":med.mid, "medicationName": med.name, "units": med.unit, "recommendedFrequency": med.recommendedFrequency,"receommendedTime": med.recommendedTime ,"times":times , "dosage": med.dosage, "amountInInventory": med.inventory, "patientID":med.pid, "patientName": patient.name, "creator": med.creator, "created_at": med.created_at, "last_updated_by": med.updated_by }
                         medicationlist.append(meds)
                     return jsonify(status = "success", medicationlist = medicationlist), 200
                 return make_response({'error': 'Medication reminder does not exist.'}, 400)
@@ -433,10 +448,15 @@ def deleteMedicationReminder(mid):
             medication = Medication.query.filter_by(mid=mid).first()
             if medication != None:
                 alerts= Alert.query.filter_by(mid=mid)
+                times = MedicationTime.query.filter_by(mid=mid)
                 db.session.delete(medication)
                 for alert in alerts:
                     db.session.delete(alert)
                 db.commit() 
+                
+                for time in times:
+                    db.session.delete(time)
+                db.commit()
                 if Medication.query.filter_by(mid=mid).first() == None and Alert.query.filter_by(mid=mid) == 'None':
                     return make_response({'success': 'The medication reminder has been deleted successfully.'},400)
                 else:
@@ -556,7 +576,6 @@ def createMealEntry(pid):
                     return make_response({'error': 'Patient does not exist'},400)
                 elif mealDiary == None:
                     return make_response({'error': 'Meal Diary does exist for this user'},400)
-
         except Exception as e: 
             db.session.rollback()
             print(e)
