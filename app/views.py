@@ -1,14 +1,19 @@
 import os
 from app import app
 from flask import render_template,make_response, redirect, request, url_for, flash, send_from_directory, Flask
-from apscheduler.schedulers.background import BackgroundScheduler  
+# from apscheduler.schedulers.background import BackgroundScheduler 
+from flask_apscheduler import APScheduler 
+from flask import current_app
+# from flask_cors import CORS, cross_origin
+# from twilio.rest import Client
+# import schedule
 import pickle
 from flask import g
 import requests
 from flask import jsonify, send_file,  flash, session, abort
 import os
 import json
-from datetime import datetime, timedelta, date
+from datetime import datetime, timedelta, date, time
 from werkzeug.security import generate_password_hash, check_password_hash
 from sqlalchemy.orm import joinedload
 from app.models import *
@@ -27,7 +32,10 @@ from functools import wraps
 # from flask_mysqldb import MySQL
 import psycopg2
 
+
 load_dotenv()
+
+
 
 @app.route('/api/v1/csrf-token', methods=['GET'])
 def get_csrf():
@@ -35,6 +43,20 @@ def get_csrf():
 
 
 # ACTIVE = {}
+# def send_reminders(phone_number):
+
+#  responseData = sms.send_message(
+#  {
+#      "from": "Vonage APIs",
+#      "to": phone_number,
+#      "text": "Drink a glass of water now!",
+#  }
+#  )
+
+#  if responseData["messages"][0]["status"] == "0":
+#      print("Message sent successfully.")
+#  else:
+#      print(f"Message failed with error: {responseData['messages'][0]['error-text']}")
 
 # def requires_auth(f):
 #   @wraps(f)
@@ -195,17 +217,17 @@ def register():
                 else:
                     weight = int(content['weight']) # get weight
                     height = float(content['height'])
-                    isSmoker = content['isSmoker'] == "Yes"
-                    isDrinker = content['isDrinker'].lower() =="Yes"
-                    hasHighBP = content['hasHighBP'] =="Yes"
-                    hasHighChol = content['hasHighChol'] =="Yes"
-                    hasHeartDisease = content['hasHeartDisease'] == "Yes"
-                    hadHeartAttack = content['hadHeartAttack'] == "Yes"
-                    hasTroubleWalking = content['hasTroubleWalking'].lower() == "Yes"
-                    hadStroke =content['hadStroke'] == "Yes" 
+                    isSmoker = content['isSmoker'].lower() == "yes"
+                    isDrinker = content['isDrinker'].lower() =="yes"
+                    hasHighBP = content['hasHighBP'].lower() =="yes"
+                    hasHighChol = content['hasHighChol'].lower() =="yes"
+                    hasHeartDisease = content['hasHeartDisease'].lower() == "yes"
+                    hadHeartAttack = content['hadHeartAttack'].lower() == "yes"
+                    hasTroubleWalking = content['hasTroubleWalking'].lower() == "yes"
+                    hadStroke =content['hadStroke'].lower() == "yes" 
                     weightUnits = content['weightUnits']
                     heightUnits = content['heightUnits']
-                    diabetesType= DiabetesType.TYPEONE if content['diabetesType'].lower() == "typeone" else DiabetesType.TYPETWO
+                    diabetesType= DiabetesType.TYPEONE if content['diabetesType'].lower() == "type one" else DiabetesType.TYPETWO
                     # bloodSugarlevels = []
                     # bloodPressurelevels = []
                     patient = Patients(age,dob,email,consentForData, name, username, password,phonenumber, gender)
@@ -328,7 +350,17 @@ def recordBloodPressure(pid):
             db.session.rollback()
             print(e)
             return make_response({'error': 'An error has occurred'},400)
-     
+
+def scheduleAlert(alrt):
+    with current_app.app_context():
+        if db.session.query(Alert).filter_by(aid=alrt.aid).first()!= None:
+            current_time = datetime.now().strftime("%I:%M %p")
+            if current_time == alrt.date_time:
+                print("It works")
+                return make_response({"success": alrt.msg})
+            else:
+                print("Not yet")
+
 @app.route("/createMedicationReminder/<pid>", methods=['POST'])
 @login_required
 @patient_or_caregiver_required
@@ -349,25 +381,31 @@ def createMedicationReminder(pid):
             if isCreatorReal:
                 if patient:
                     patient =Patients.query.filter_by(pid=pid).first()
-                    if Medication.query.filter_by(name=name) is None:
+                    if Medication.query.filter_by(name=name).first() == None:
                         medication = Medication(name, unit, recommendedFrequency,recTime,amount,inventory, pid, creator, creator)
                         db.session.add(medication)
                         db.session.commit() 
-                        for i in range(recommendedFrequency):
+                        for i in range(1, recommendedFrequency):
                             timekey = 'time' + str(i)
                             time = datetime.strptime(content[(timekey)], '%I:%M %p') if content[(timekey)] != None else "Time value missing"
                             if time != "Time value missing":
                                 medTime = MedicationTime(time,medication.mid)
                                 db.session.add(medTime)
-                                db.commit()
-                                alrt=Alert("Hi "+patient.username+"! It's "+ content['time']+ ". Time to take your "+ medication.name + " medication.", AlertType.MEDICATION, time, pid, medication.mid)
+                                db.session.commit()
+                                medication=Medication.query.filter_by(name=name).first()
+                                alrt=Alert("Hi "+patient.username+"! It's "+ content[(timekey)]+ ". Time to take your "+ medication.name + " medication.", AlertType.MEDICATION, time, pid, medication.mid)
                                 db.session.add(alrt)
                                 db.session.commit()
+                                scheduler = APScheduler()
+                                scheduler.add_job(func = scheduleAlert, args=(alrt,),trigger="interval", seconds=60, id="medScheduler")
+                                scheduler.start()
                             else:
                                 db.session.rollback()
                                 return make_response({'error': 'Time value missing'},400)
                         return make_response({'success': 'Medication reminder has been created successfully'},200)
                     else:
+                        ans = Medication.query.filter_by(name=name).first()
+                        print(ans)
                         return make_response({'error': 'Medication Reminder already exist. Would you like to edit your existing medication instead?'},400)  
                 return make_response({'error': 'Patient does not exist'},400)
             return make_response({'error': 'The user attempting to create the medication reminder does not exist.'},400)
@@ -400,7 +438,7 @@ def editMedicationReminder(mid):
                     time = datetime.strptime(content[(timekey)], '%I:%M %p') if content[(timekey)] != None else medication.time
                     medTime = MedicationTime(time,medication.mid)
                     db.session.add(medTime)
-                    db.commit()
+                    db.session.commit()
                     alrt=Alert("Hi "+patient.username+"! It's "+ content['time']+ ". Time to take your "+ medication.name + " medication.", AlertType.MEDICATION, time, medication.pid, medication.mid)
                     db.session.add(alrt)
                     db.session.commit()
@@ -565,7 +603,7 @@ def getMealEntries(pid):
                 patient= Patients.query.filter_by(pid=pid).first()
                 mealDiary = MealDiary.query.filter_by(pid=pid).first()
                 if patient != None and mealDiary != None:
-                    allmealentries = MealEntry.query.filter_by(mealdiaryid=mealDiary.mdid).order_by(MealEntry.date_and_time.desc()).all()
+                    allmealentries = MealEntry.query.filter_by(mealdiaryid=mealDiary.mdid).all()
                     if allmealentries != None:
                         meallist=[]
                         for meal in allmealentries:

@@ -1,7 +1,8 @@
 from . import db
-from datetime import datetime
+from datetime import datetime, time
 from werkzeug.security import generate_password_hash
 from enum import Enum
+import time
 
 patient_caregiver = db.Table(
     'patient_caregiver',
@@ -335,7 +336,7 @@ class Medication(db.Model):
     creator = db.Column(db.String(256))
     created_at = db.Column(db.DateTime, default=datetime.now)
     lastupdated_by = db.Column(db.String(256), nullable = True)
-    reminderTimes = db.relationship('Time', backref='medication', lazy =True)
+    reminderTimes = db.relationship('MedicationTime', backref='medication', lazy =True)
     alerts = db.relationship('Alert', backref='medication', lazy =True)
     audits = db.relationship('MedicationAudit', backref='medication', lazy=True)
     
@@ -358,7 +359,7 @@ class Medication(db.Model):
 class MedicationTime(db.Model):
     __tablename__ = "medtime"
     mtid = db.Column(db.Integer, primary_key=True, autoincrement=True)
-    time = db.Column(db.Time)
+    time = db.Column(db.DateTime)
     mid = db.Column(db.Integer, db.ForeignKey('medication.mid'))
     
     def __init__(self, time, mid):
@@ -382,7 +383,7 @@ class Alert(db.Model):
     aid = db.Column(db.Integer, primary_key=True, autoincrement=True)
     msg = db.Column(db.String(256))
     type = db.Column(db.Enum(AlertType))
-    date_time = db.Column(db.Time)
+    date_time = db.Column(db.DateTime)
     pid = db.Column(db.Integer, db.ForeignKey('patients.pid'))
     mid = db.Column(db.Integer, db.ForeignKey('medication.mid'), nullable = True)
     
@@ -392,7 +393,8 @@ class Alert(db.Model):
         self.datetime = date_time
         self.pid = pid
         self.mid = mid
-        
+
+
 class MealEntry(db.Model):
     __tablename__ = "mealentry"
     meid= db.Column(db.Integer, primary_key=True, autoincrement=True)
@@ -404,7 +406,7 @@ class MealEntry(db.Model):
     meal = db.Column(db.String(250))
     pid = db.Column(db.Integer, db.ForeignKey('patients.pid'))
     nutrients_id = db.Column(db.Integer, db.ForeignKey('nutrients.nid'))
-    mealdiaryid = db.Column(db.Integer, db.ForeignKey('mealDiary.mdid'))
+    mealdiaryid = db.Column(db.Integer, db.ForeignKey('mealdiary.mdid'))
     
     def __init__(self, portiontype, servingSize, date_and_time, mealtype, mealOrDrink, meal, pid, nutrients_id):
         self.portiontype = portiontype
@@ -415,6 +417,16 @@ class MealEntry(db.Model):
         self.meal = meal 
         self.pid = pid
         self.nutrients_id = nutrients_id
+
+class MealDiary(db.Model):
+    __tablename__ = "mealdiary"
+    mdid = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    pid = db.Column(db.Integer, db.ForeignKey('patients.pid'))
+    allMeals = db.relationship("MealEntry", backref="mealdiary", order_by=MealEntry.date_and_time, lazy=True)
+    
+    def __init__(self, pid):
+        self.pid = pid
+        
     
 class Nutrients(db.Model):
     __tablename__ = "nutrients"
@@ -441,17 +453,3 @@ class Nutrients(db.Model):
         self.cholesterol_mg = cholesterol_mg
         self.carbohydrates_total_g = carbohydrates_total_g
         
-class MealDiary(db.Model):
-    __tablename__ = "mealDiary"
-    mdid = db.Column(db.Integer, primary_key=True, autoincrement=True)
-    pid = db.Column(db.Integer, db.ForeignKey('patients.pid'))
-    breakfasts = db.relationship('MealEntry', primaryjoin="and_(MealEntry.mealdiaryid==MealDiary.mdid, MealEntry.mealtype == MealType.BREAKFAST",order_by="desc(MealEntry.date_and_time)",lazy = True)
-    lunches = db.relationship('MealEntry', primaryjoin="and_(MealEntry.mealdiaryid==MealDiary.mdid, MealEntry.mealtype == MealType.LUNCH)",order_by="desc(MealEntry.date_and_time)",lazy = True)
-    dinners = db.relationship('MealEntry', primaryjoin="and_(MealEntry.mealdiaryid==MealDiary.mdid, MealEntry.mealtype == MealType.DINNER)",order_by="desc(MealEntry.date_and_time)",lazy = True)
-    desserts = db.relationship('MealEntry', primaryjoin="and_(MealEntry.mealdiaryid==MealDiary.mdid, MealEntry.mealtype == MealType.DESSERT)",order_by="desc(MealEntry.date_and_time)",lazy = True)
-    brunches= db.relationship('MealEntry', primaryjoin="and_(MealEntry.mealdiaryid==MealDiary.mdid, MealEntry.mealtype == MealType.BRUNCH)",order_by="desc(MealEntry.date_and_time)",lazy = True)
-    snacks = db.relationship('MealEntry', primaryjoin="and_(MealEntry.mealdiaryid==MealDiary.mdid, MealEntry.mealtype == MealType.SNACK)",order_by="desc(MealEntry.date_and_time)",lazy = True)
-    allMeals = db.relationship('MealEntry', primaryjoin="and_(MealEntry.mealdiaryid==MealDiary.mdid)",order_by="desc(MealEntry.date_and_time)",lazy = True)
-    
-    def __init__(self, pid):
-        self.pid = pid

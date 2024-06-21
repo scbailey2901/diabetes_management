@@ -1,8 +1,8 @@
-"""Creates Models
+"""Made Changes
 
-Revision ID: 985ffd0665f2
+Revision ID: fd9c4efda7af
 Revises: 
-Create Date: 2024-06-18 09:09:30.411128
+Create Date: 2024-06-20 16:39:12.396218
 
 """
 from alembic import op
@@ -10,7 +10,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision = '985ffd0665f2'
+revision = 'fd9c4efda7af'
 down_revision = None
 branch_labels = None
 depends_on = None
@@ -33,6 +33,19 @@ def upgrade():
     sa.Column('joined_on', sa.DateTime(), nullable=True),
     sa.PrimaryKeyConstraint('cid'),
     sa.UniqueConstraint('username')
+    )
+    op.create_table('nutrients',
+    sa.Column('nid', sa.Integer(), autoincrement=True, nullable=False),
+    sa.Column('sugar_in_g', sa.Float(), nullable=True),
+    sa.Column('protein_in_g', sa.Float(), nullable=True),
+    sa.Column('sodium_in_mg', sa.Float(), nullable=True),
+    sa.Column('calories', sa.Float(), nullable=True),
+    sa.Column('fat_total_g', sa.Float(), nullable=True),
+    sa.Column('fat_saturated_g', sa.Float(), nullable=True),
+    sa.Column('potassium_mg', sa.Float(), nullable=True),
+    sa.Column('cholesterol_mg', sa.Float(), nullable=True),
+    sa.Column('carbohydrates_total_g', sa.Float(), nullable=True),
+    sa.PrimaryKeyConstraint('nid')
     )
     op.create_table('patients',
     sa.Column('pid', sa.Integer(), autoincrement=True, nullable=False),
@@ -63,6 +76,7 @@ def upgrade():
     sa.Column('weightUnits', sa.String(length=50), nullable=True),
     sa.Column('height', sa.Float(), nullable=True),
     sa.Column('heightUnits', sa.String(length=50), nullable=True),
+    sa.Column('diabetesType', sa.Enum('TYPEONE', 'TYPETWO', name='diabetestype'), nullable=True),
     sa.Column('isSmoker', sa.Boolean(), nullable=True),
     sa.Column('isDrinker', sa.Boolean(), nullable=True),
     sa.Column('hasHighBP', sa.Boolean(), nullable=True),
@@ -75,12 +89,19 @@ def upgrade():
     sa.ForeignKeyConstraint(['patient_id'], ['patients.pid'], ),
     sa.PrimaryKeyConstraint('hrid')
     )
+    op.create_table('mealdiary',
+    sa.Column('mdid', sa.Integer(), autoincrement=True, nullable=False),
+    sa.Column('pid', sa.Integer(), nullable=True),
+    sa.ForeignKeyConstraint(['pid'], ['patients.pid'], ),
+    sa.PrimaryKeyConstraint('mdid')
+    )
     op.create_table('medication',
     sa.Column('mid', sa.Integer(), autoincrement=True, nullable=False),
     sa.Column('name', sa.String(length=256), nullable=True),
     sa.Column('unit', sa.String(length=256), nullable=True),
     sa.Column('recommendedFrequency', sa.Integer(), nullable=True),
-    sa.Column('dosage', sa.Integer(), nullable=True),
+    sa.Column('recommendedTime', sa.Enum('AFTERMEAL', 'BEFOREMEAL', name='rectime'), nullable=True),
+    sa.Column('amount', sa.Integer(), nullable=True),
     sa.Column('inventory', sa.Integer(), nullable=True),
     sa.Column('pid', sa.Integer(), nullable=True),
     sa.Column('creator', sa.String(length=256), nullable=True),
@@ -99,7 +120,7 @@ def upgrade():
     sa.Column('aid', sa.Integer(), autoincrement=True, nullable=False),
     sa.Column('msg', sa.String(length=256), nullable=True),
     sa.Column('type', sa.Enum('MEDICATION', 'BP_TOO_LOW', 'AT_RISK_OF_EMERGENCY', 'EAT_MEAL', 'TOO_MUCH_SALT', 'TOO_MUCH_SUGAR', name='alerttype'), nullable=True),
-    sa.Column('date_time', sa.DateTime(), nullable=True),
+    sa.Column('date_time', sa.Time(), nullable=True),
     sa.Column('pid', sa.Integer(), nullable=True),
     sa.Column('mid', sa.Integer(), nullable=True),
     sa.ForeignKeyConstraint(['mid'], ['medication.mid'], ),
@@ -134,6 +155,22 @@ def upgrade():
     sa.ForeignKeyConstraint(['patient_id'], ['patients.pid'], ),
     sa.PrimaryKeyConstraint('bslID')
     )
+    op.create_table('mealentry',
+    sa.Column('meid', sa.Integer(), autoincrement=True, nullable=False),
+    sa.Column('portiontype', sa.String(length=250), nullable=True),
+    sa.Column('servingSize', sa.Integer(), nullable=True),
+    sa.Column('date_and_time', sa.DateTime(), nullable=True),
+    sa.Column('mealtype', sa.Enum('BEVERAGE', 'BREAKFAST', 'LUNCH', 'DINNER', 'BRUNCH', 'SNACK', 'DESSERT', name='mealtype'), nullable=True),
+    sa.Column('mealOrDrink', sa.Enum('Food', 'DRINK', 'FOODANDDRINK', name='foodordrink'), nullable=True),
+    sa.Column('meal', sa.String(length=250), nullable=True),
+    sa.Column('pid', sa.Integer(), nullable=True),
+    sa.Column('nutrients_id', sa.Integer(), nullable=True),
+    sa.Column('mealdiaryid', sa.Integer(), nullable=True),
+    sa.ForeignKeyConstraint(['mealdiaryid'], ['mealdiary.mdid'], ),
+    sa.ForeignKeyConstraint(['nutrients_id'], ['nutrients.nid'], ),
+    sa.ForeignKeyConstraint(['pid'], ['patients.pid'], ),
+    sa.PrimaryKeyConstraint('meid')
+    )
     op.create_table('medicationaudit',
     sa.Column('auid', sa.Integer(), autoincrement=True, nullable=False),
     sa.Column('mid', sa.Integer(), nullable=True),
@@ -142,19 +179,30 @@ def upgrade():
     sa.ForeignKeyConstraint(['mid'], ['medication.mid'], ),
     sa.PrimaryKeyConstraint('auid')
     )
+    op.create_table('medtime',
+    sa.Column('mtid', sa.Integer(), autoincrement=True, nullable=False),
+    sa.Column('time', sa.Time(), nullable=True),
+    sa.Column('mid', sa.Integer(), nullable=True),
+    sa.ForeignKeyConstraint(['mid'], ['medication.mid'], ),
+    sa.PrimaryKeyConstraint('mtid')
+    )
     # ### end Alembic commands ###
 
 
 def downgrade():
     # ### commands auto generated by Alembic - please adjust! ###
+    op.drop_table('medtime')
     op.drop_table('medicationaudit')
+    op.drop_table('mealentry')
     op.drop_table('bloodsugarlevels')
     op.drop_table('bloodpressurelevels')
     op.drop_table('alert')
     op.drop_table('patient_caregiver')
     op.drop_table('medication')
+    op.drop_table('mealdiary')
     op.drop_table('healthrecord')
     op.drop_table('credentials')
     op.drop_table('patients')
+    op.drop_table('nutrients')
     op.drop_table('caregivers')
     # ### end Alembic commands ###
