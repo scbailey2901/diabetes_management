@@ -359,7 +359,7 @@ class Medication(db.Model):
 class MedicationTime(db.Model):
     __tablename__ = "medtime"
     mtid = db.Column(db.Integer, primary_key=True, autoincrement=True)
-    time = db.Column(db.DateTime)
+    time = db.Column(db.Time)
     mid = db.Column(db.Integer, db.ForeignKey('medication.mid'))
     
     def __init__(self, time, mid):
@@ -373,6 +373,7 @@ class MedicationAudit(db.Model):
     updated_at = db.Column(db.DateTime, default=datetime.now)
     updated_by = db.Column(db.String(256))
     
+    
     def __init__(self, mid, updated_by):
         self.mid = mid
         self.updated_by = updated_by
@@ -383,14 +384,15 @@ class Alert(db.Model):
     aid = db.Column(db.Integer, primary_key=True, autoincrement=True)
     msg = db.Column(db.String(256))
     type = db.Column(db.Enum(AlertType))
-    date_time = db.Column(db.DateTime)
+    time = db.Column(db.Time)
     pid = db.Column(db.Integer, db.ForeignKey('patients.pid'))
     mid = db.Column(db.Integer, db.ForeignKey('medication.mid'), nullable = True)
     
-    def __init__(self, msg, type, date_time, pid, mid):
+    
+    def __init__(self, msg, type, time, pid, mid):
         self.msg = msg
         self.type = type
-        self.datetime = date_time
+        self.time = time
         self.pid = pid
         self.mid = mid
 

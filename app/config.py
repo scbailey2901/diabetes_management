@@ -11,3 +11,4 @@ class Config(object):
     UPLOAD_FOLDER = os.environ.get('UPLOAD_FOLDER')
     SQLALCHEMY_DATABASE_URI = os.environ.get('SQLALCHEMY_DATABASE_URI', 'mysql://diabetes_user:Iamagirl2$@localhost/diabetes')
     SQLALCHEMY_TRACK_MODIFICATIONS = False
+    # SCHEDULER_API_ENABLED = True

@@ -1,9 +1,13 @@
 import os
-from app import app
+from app import app, socketio
+
 from flask import render_template,make_response, redirect, request, url_for, flash, send_from_directory, Flask
 # from apscheduler.schedulers.background import BackgroundScheduler 
 from flask_apscheduler import APScheduler 
+from apscheduler.schedulers.background import BackgroundScheduler
 from flask import current_app
+from flask_socketio import SocketIO
+from flask_socketio import emit
 # from flask_cors import CORS, cross_origin
 # from twilio.rest import Client
 # import schedule
@@ -351,12 +355,16 @@ def recordBloodPressure(pid):
             print(e)
             return make_response({'error': 'An error has occurred'},400)
 
+@socketio.on('connect')
 def scheduleAlert(alrt):
-    with current_app.app_context():
-        if db.session.query(Alert).filter_by(aid=alrt.aid).first()!= None:
-            current_time = datetime.now().strftime("%I:%M %p")
-            if current_time == alrt.date_time:
-                print("It works")
+    with app.app_context():
+        alert = db.session.query(Alert).filter_by(aid=alrt.aid).first()
+        if alert != None:
+            current_time = datetime.now().time().strftime("%I:%M %p")
+            alert_time = alert.time.strftime("%I:%M %p")
+            if current_time == alert_time:
+                print(alrt.msg)
+                # emit('server_response', {'data': alrt.msg}) #uncomment when react app has been set up. see bottom for possible react stuff 
                 return make_response({"success": alrt.msg})
             else:
                 print("Not yet")
@@ -385,9 +393,9 @@ def createMedicationReminder(pid):
                         medication = Medication(name, unit, recommendedFrequency,recTime,amount,inventory, pid, creator, creator)
                         db.session.add(medication)
                         db.session.commit() 
-                        for i in range(1, recommendedFrequency):
+                        for i in range(1, recommendedFrequency+1):
                             timekey = 'time' + str(i)
-                            time = datetime.strptime(content[(timekey)], '%I:%M %p') if content[(timekey)] != None else "Time value missing"
+                            time = datetime.strptime(content[(timekey)], '%I:%M %p').time() if content[(timekey)] != None else "Time value missing"
                             if time != "Time value missing":
                                 medTime = MedicationTime(time,medication.mid)
                                 db.session.add(medTime)
@@ -396,12 +404,22 @@ def createMedicationReminder(pid):
                                 alrt=Alert("Hi "+patient.username+"! It's "+ content[(timekey)]+ ". Time to take your "+ medication.name + " medication.", AlertType.MEDICATION, time, pid, medication.mid)
                                 db.session.add(alrt)
                                 db.session.commit()
-                                scheduler = APScheduler()
-                                scheduler.add_job(func = scheduleAlert, args=(alrt,),trigger="interval", seconds=60, id="medScheduler")
-                                scheduler.start()
+                                # job_id = f"medScheduler_{alrt.aid}"
+                                # scheduler.add_job(scheduleAlert, trigger = "interval", seconds=30, id = job_id + str(i), args=[alrt] )
                             else:
                                 db.session.rollback()
                                 return make_response({'error': 'Time value missing'},400)
+                        
+                        alerts= db.session.query(Alert).filter_by(mid=medication.mid).all()
+                        for alert in alerts:
+                            job_id = f"medScheduler_{alert.aid}"
+                            scheduler = APScheduler(scheduler=BackgroundScheduler())
+                            if scheduler.get_job(job_id):
+                                scheduler.remove_job(job_id)
+                                print(job_id)
+                            scheduler.add_job(func=scheduleAlert, trigger = "interval", seconds=30, args=[alert], id =job_id)
+                            scheduler.start()
+            
                         return make_response({'success': 'Medication reminder has been created successfully'},200)
                     else:
                         ans = Medication.query.filter_by(name=name).first()
@@ -647,3 +665,36 @@ def add_header(response):
     response.headers['X-UA-Compatible'] = 'IE=Edge,chrome=1'
     response.headers['Cache-Control'] = 'public, max-age=0'
     return response
+
+
+
+
+
+# import React, { useEffect } from 'react';
+# import socketIOClient from 'socket.io-client';
+
+# const ENDPOINT = 'http://localhost:5000';  // Adjust the endpoint to your Flask-SocketIO server
+
+# const App = () => {
+#   useEffect(() => {
+#     const socket = socketIOClient(ENDPOINT);
+
+#     // Event handler for 'server_response' event from Flask
+#     socket.on('server_response', data => {
+#       console.log('Received server response:', data);
+#       // Handle the received data in your React component
+#     });
+
+#     // Clean up socket connection on component unmount
+#     return () => socket.disconnect();
+#   }, []);
+
+#   return (
+#     <div>
+#       <h1>SocketIO Example</h1>
+#       {/* Your React component content */}
+#     </div>
+#   );
+# };
+
+# export default App;

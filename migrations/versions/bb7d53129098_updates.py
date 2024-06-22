@@ -1,8 +1,8 @@
-"""Made Changes
+"""Updates
 
-Revision ID: fd9c4efda7af
+Revision ID: bb7d53129098
 Revises: 
-Create Date: 2024-06-20 16:39:12.396218
+Create Date: 2024-06-22 00:04:25.250591
 
 """
 from alembic import op
@@ -10,7 +10,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision = 'fd9c4efda7af'
+revision = 'bb7d53129098'
 down_revision = None
 branch_labels = None
 depends_on = None
@@ -120,7 +120,7 @@ def upgrade():
     sa.Column('aid', sa.Integer(), autoincrement=True, nullable=False),
     sa.Column('msg', sa.String(length=256), nullable=True),
     sa.Column('type', sa.Enum('MEDICATION', 'BP_TOO_LOW', 'AT_RISK_OF_EMERGENCY', 'EAT_MEAL', 'TOO_MUCH_SALT', 'TOO_MUCH_SUGAR', name='alerttype'), nullable=True),
-    sa.Column('date_time', sa.Time(), nullable=True),
+    sa.Column('time', sa.Time(), nullable=True),
     sa.Column('pid', sa.Integer(), nullable=True),
     sa.Column('mid', sa.Integer(), nullable=True),
     sa.ForeignKeyConstraint(['mid'], ['medication.mid'], ),
