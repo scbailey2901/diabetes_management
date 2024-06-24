@@ -33,6 +33,13 @@ class AlertType(Enum):
     TOO_MUCH_SALT = "You are consuming too much sodium"
     TOO_MUCH_SUGAR = "You are consuming too much sugar/carbs"
 
+class SymptomType(Enum):
+    MOOD = "mood"
+    SLEEP = "sleep"
+    APETITE = "apetite"
+    ACTIVITY = "activity"
+    OTHER= "other"
+
 class MealType(Enum):
     BEVERAGE = "beverage"
     BREAKFAST = "breakfast"
@@ -135,6 +142,7 @@ class HealthRecord(db.Model): #add activity level
     hasTroubleWalking = db.Column(db.Boolean, default = False)
     bloodSugarlevels = db.relationship('BloodSugarLevels', backref='healthrecord', lazy = True)
     bloodPressurelevels = db.relationship('BloodPressureLevels', backref='healthrecord', lazy = True)
+    symptoms = db.relationship('Symptom', backref='healthrecord', lazy = True)
     patient_id = db.Column(db.Integer, db.ForeignKey('patients.pid'))
     
     def __init__(self, age, weight,weightUnits, height, heightUnits,diabetesType,isSmoker, isDrinker, hasHighBP, hasHighChol, hasHeartDisease, hadHeartAttack, hadStroke,hasTroubleWalking,bloodSugarlevels,bloodPressurelevels,patient_id ):
@@ -469,3 +477,21 @@ class Nutrients(db.Model):
         self.carbohydrates_total_g = carbohydrates_total_g
         self.meid = meid
         
+class Symptom(db.Model):
+    __tablename__ = "tablename"
+    sid = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    severity = db.Column(db.Integer)
+    date_and_time = db.Column(db.DateTime)
+    symptom_name = db.Column(db.String(250))
+    symptomType = db.Column(db.Enuum(SymptomType))
+    patient_id = db.Column(db.Integer, db.ForeignKey('patients.pid'))
+    hrid = db.Column(db.Integer, db.ForeignKey('healthrecord.hrid'))
+    
+    def __init__(self, symptom_name, symptomType, severity, date_and_time, notes, patient_id, hrid):
+        self.symptom_name = symptom_name
+        self.symptomType = symptomType
+        self.severity = severity
+        self.date_and_time = date_and_time
+        self.notes = notes
+        self.patient_id= patient_id
+        self.hrid = hrid
