@@ -533,6 +533,7 @@ def createMealEntry(pid):
             portiontype = content["portiontype"]
             servingSize = content['servingSize']
             date_and_time = content['date_and_time']
+            date_and_time = datetime.strptime(date_and_time, "%m/%d/%Y %H:%M").date()
             if content['mealtype'].lower() == "beverage":
                 mealtype = MealType.BEVERAGE 
             elif content['mealtype'].lower() == "breakfast":
@@ -575,11 +576,12 @@ def createMealEntry(pid):
                     potassium_mg = nutrients_data['potassium_mg']
                     cholesterol_mg = nutrients_data['cholesterol_mg']
                     carbohydrates_total_g = nutrients_data['carbohydrates_total_g']
-                    nutrients = Nutrients(sugar_in_g, protein_in_g,sodium_in_mg, calories,fat_total_g,fat_saturated_g, potassium_mg, cholesterol_mg, carbohydrates_total_g )
-                    db.session.add(nutrients)
-                    db.session.commit()
-                    mealentry= MealEntry(portiontype,servingSize,date_and_time,mealtype,mealOrDrink,meal,pid,nutrients.nid)
+                    mealentry= MealEntry(portiontype,servingSize,date_and_time,mealtype,mealOrDrink,meal,pid)
                     db.session.add(mealentry)
+                    db.session.commit()
+                    mealEntry = MealEntry.query.filter_by(meal=meal).first()
+                    nutrients = Nutrients(sugar_in_g, protein_in_g,sodium_in_mg, calories,fat_total_g,fat_saturated_g, potassium_mg, cholesterol_mg, carbohydrates_total_g,mealEntry.meid)
+                    db.session.add(nutrients)
                     db.session.commit()
                     mealDiary = MealDiary(pid)
                     db.session.add(mealDiary)
@@ -598,17 +600,70 @@ def createMealEntry(pid):
             return make_response({'error': 'An error has occurred.'},400)
    
 
-# @app.route("/editMealEntry/<pid>", methods = ['PUT'])
-# @login_required
-# @patient_or_caregiver_required
-# def createMealEntry(pid):    
-#     if request.method =="PUT":
-#         try:
-            
-#         except Exception as e: 
-#             db.session.rollback()
-#             print(e)
-#             return make_response({'error': 'An error has occurred.'},400)     
+@app.route("/editMealEntry/<meid>", methods = ['PUT'])
+@login_required
+@patient_or_caregiver_required
+def editMealEntry(meid):    
+    if request.method =="PUT":
+        try:
+            content = request.get_json()
+            mealEntry = MealEntry.query.filter_by(meid=meid).first()
+            patient = Patients.query.filter_by(pid=mealEntry.pid).first()
+            if patient.name == current_user.name or current_user in patient.caregivers:
+                mealEntry.portiontype = content['portiontype'] if content['portiontype'] != None else mealEntry.portiontype
+                mealEntry.servingSize = content['servingSize'] if content['servingSize'] != None else mealEntry.servingSize
+                mealEntry.meal = content['meal'] if content['meal'] != None else mealEntry.meal
+                if content['mealtype'] != None:
+                    if content['mealtype'].lower() == "beverage":
+                        mealEntry.mealtype = MealType.BEVERAGE 
+                    elif content['mealtype'].lower() == "breakfast":
+                        mealEntry.mealtype = MealType.BREAKFAST
+                    elif content['mealtype'].lower() == "lunch":
+                        mealEntry.mealtype = MealType.LUNCH
+                    elif content['mealtype'].lower() == "brunch":
+                        mealEntry.mealtype = MealType.BRUNCH
+                    elif content['mealtype'].lower() == "snack":
+                        mealEntry.mealtype = MealType.SNACK
+                    elif content['mealtype'].lower() == "dessert":
+                        mealEntry.mealtype = MealType.DESSERT
+                    
+                if content['mealOrDrink'] != None:
+                    if content['mealOrDrink'].lower() == "food":
+                        mealEntry.mealOrDrink = FoodOrDrink.Food
+                    elif content['mealOrDrink'].lower() == "drink":
+                        mealEntry.mealOrDrink = FoodOrDrink.DRINK
+                    else:
+                        mealEntry.mealOrDrink = FoodOrDrink.FOODANDDRINK
+
+                for nutrient in mealEntry.nutrients:
+                    api_url = 'https://api.calorieninjas.com/v1/nutrition?query='
+                    query = mealEntry.servingSize+ " "+ mealEntry.portiontype + " " + mealEntry.meal 
+                    response = requests.get(api_url + query, headers={'X-Api-Key': 'UdjAYE21RFKdvFnrUhM25g==xL6FYYElHVpuQrAJ'})
+                    if response.status_code == requests.codes.ok:
+                        print(response.text)
+                        nutrients_data = response.json().get('items', [])[0]
+                        nutrient.sugar_in_g = nutrients_data['sugar_g']
+                        nutrient.protein_in_g = nutrients_data['protein_in_g']
+                        nutrient.sodium_in_mg = nutrients_data['sodium_in_mg']
+                        nutrient.calories = nutrients_data['calories']
+                        nutrient.fat_total_g = nutrients_data['fat_total_g']
+                        nutrient.fat_saturated_g = nutrients_data['fat_saturated_g']
+                        nutrient.potassium_mg = nutrients_data['potassium_mg']
+                        nutrient.cholesterol_mg = nutrients_data['cholesterol_mg']
+                        nutrient.carbohydrates_total_g = nutrients_data['carbohydrates_total_g']
+                    else: 
+                        return make_response({'error': response.text},response.status_code)
+                    
+                medAudit = MealEntryAudit(meid, current_user.name)
+                db.session.add(medAudit)
+                db.commit()
+                return make_response({'success': 'Meal Entry has been updated successfully'},200)
+            return make_response({'error': 'User is not authorised to edit this meal entry.'},400)    
+                        
+        except Exception as e: 
+            db.session.rollback()
+            print(e)
+            return make_response({'error': 'An error has occurred.'},400)     
  
 
 @app.route("/getAllMealEntries/<pid>", methods = ['GET'])
@@ -621,13 +676,42 @@ def getMealEntries(pid):
                 patient= Patients.query.filter_by(pid=pid).first()
                 mealDiary = MealDiary.query.filter_by(pid=pid).first()
                 if patient != None and mealDiary != None:
-                    allmealentries = MealEntry.query.filter_by(mealdiaryid=mealDiary.mdid).all()
-                    if allmealentries != None:
+                    if mealDiary.allmeals != None:
                         meallist=[]
-                        for meal in allmealentries:
+                        for meal in mealDiary.allmeals:
                             nutrients = Nutrients.query.filter_by(nid=meal.nutrients_id)
                             mealent = {"portiontype": meal.portiontype, "servingSize": meal.servingSize, "date_and_time":meal.date_and_time, "mealtype": meal.mealtype, "mealOrDrink": meal.mealOrDrink, "meal": meal.meal, "patient_id": meal.pid,"nutrients_id":meal.nutrients_id,"sugar_in_g":nutrients.sugar_in_g,"protein_in_g": nutrients.protein_in_g, "sodium_in_mg": nutrients.sodium_in_mg, "calories":nutrients.calories, "fat_total_g": nutrients.fat_total_g, "fat_saturated_g": nutrients.fat_saturated_g, "potassium_mg": nutrients.potassium_mg, "cholesterol_mg": nutrients.cholesterol_mg,"carbohydrates_total_g": nutrients.carbohydrates_total_g}
                             meallist.append(mealent)
+                        return make_response({'mealentries': meallist}, 200)
+                elif patient == None:
+                    return make_response({'error': 'Patient does not exist'},400)
+                elif mealDiary == None:
+                    return make_response({'error': 'Meal Diary does exist for this user'},400)
+        except Exception as e: 
+            db.session.rollback()
+            print(e)
+            return make_response({'error': 'An error has occurred.'},400)    
+        
+@app.route("/getWeeklyMealEntries/<pid>", methods = ['GET'])
+@login_required
+@patient_or_caregiver_required
+def getWeeklyMealEntries(pid):    
+    if request.method =="GET":
+        try:
+            if request.method =="GET":
+                patient= Patients.query.filter_by(pid=pid).first()
+                mealDiary = MealDiary.query.filter_by(pid=pid).first()
+                if patient != None and mealDiary != None:
+                    if mealDiary.allmeals != None:
+                        meallist=[]
+                        start = date.today() - timedelta(days=today.weekday())
+                        end = start + timedelta(days=6)
+                        for meal in mealDiary.allmeals:
+                            if (start <= meal.date_and_time.date()) and (meal.date_and_time.date() <= end):
+                                nutrients = Nutrients.query.filter_by(nid=meal.nutrients_id)
+                                mealent = {"portiontype": meal.portiontype, "servingSize": meal.servingSize, "date_and_time":meal.date_and_time, "mealtype": meal.mealtype, "mealOrDrink": meal.mealOrDrink, "meal": meal.meal, "patient_id": meal.pid,"nutrients_id":meal.nutrients_id,"sugar_in_g":nutrients.sugar_in_g,"protein_in_g": nutrients.protein_in_g, "sodium_in_mg": nutrients.sodium_in_mg, "calories":nutrients.calories, "fat_total_g": nutrients.fat_total_g, "fat_saturated_g": nutrients.fat_saturated_g, "potassium_mg": nutrients.potassium_mg, "cholesterol_mg": nutrients.cholesterol_mg,"carbohydrates_total_g": nutrients.carbohydrates_total_g}
+                                meallist.append(mealent)
+                        return make_response({'mealentries': meallist}, 200)
                 elif patient == None:
                     return make_response({'error': 'Patient does not exist'},400)
                 elif mealDiary == None:
@@ -637,8 +721,443 @@ def getMealEntries(pid):
             print(e)
             return make_response({'error': 'An error has occurred.'},400)    
 
+@app.route("/getDailyMealEntries/<pid>", methods = ['GET'])
+@login_required
+@patient_or_caregiver_required
+def getDailyMealEntries(pid):    
+    if request.method =="GET":
+        try:
+            if request.method =="GET":
+                patient= Patients.query.filter_by(pid=pid).first()
+                mealDiary = MealDiary.query.filter_by(pid=pid).first()
+                if patient != None and mealDiary != None:
+                    if mealDiary.allmeals != None:
+                        meallist=[]
+                        for meal in mealDiary.allmeals:
+                            if meal.date_and_time.date() == date.today():
+                                nutrients = Nutrients.query.filter_by(nid=meal.nutrients_id)
+                                mealent = {"portiontype": meal.portiontype, "servingSize": meal.servingSize, "date_and_time":meal.date_and_time, "mealtype": meal.mealtype, "mealOrDrink": meal.mealOrDrink, "meal": meal.meal, "patient_id": meal.pid,"nutrients_id":meal.nutrients_id,"sugar_in_g":nutrients.sugar_in_g,"protein_in_g": nutrients.protein_in_g, "sodium_in_mg": nutrients.sodium_in_mg, "calories":nutrients.calories, "fat_total_g": nutrients.fat_total_g, "fat_saturated_g": nutrients.fat_saturated_g, "potassium_mg": nutrients.potassium_mg, "cholesterol_mg": nutrients.cholesterol_mg,"carbohydrates_total_g": nutrients.carbohydrates_total_g}
+                                meallist.append(mealent)
+                        return make_response({'mealentries': meallist}, 200)
+                elif patient == None:
+                    return make_response({'error': 'Patient does not exist'},400)
+                elif mealDiary == None:
+                    return make_response({'error': 'Meal Diary does exist for this user'},400)
+        except Exception as e: 
+            db.session.rollback()
+            print(e)
+            return make_response({'error': 'An error has occurred.'},400)    
+        
+@app.route("/getMonthlyMealEntries/<pid>", methods = ['GET'])
+@login_required
+@patient_or_caregiver_required
+def getMonthlyMealEntries(pid):    
+    if request.method =="GET":
+        try:
+            if request.method =="GET":
+                patient= Patients.query.filter_by(pid=pid).first()
+                mealDiary = MealDiary.query.filter_by(pid=pid).first()
+                if patient != None and mealDiary != None:
+                    if mealDiary.allmeals != None:
+                        meallist=[]
+                        today = date.today()
+                        start_month = today.replace(days=1)
+                        if today.month ==12:
+                            end_month = today.replace(month = 12, days = 31)
+                        else:
+                            end_onth = today.replace(month=today.month+1, day= 1) - timedelta(days = 1)
+                            
+                        for meal in mealDiary.allmeals:
+                            if start_month <= meal.date_and_time.date() and meal.date_and_time.date() <= end_month:
+                                nutrients = Nutrients.query.filter_by(nid=meal.nutrients_id)
+                                mealent = {"portiontype": meal.portiontype, "servingSize": meal.servingSize, "date_and_time":meal.date_and_time, "mealtype": meal.mealtype, "mealOrDrink": meal.mealOrDrink, "meal": meal.meal, "patient_id": meal.pid,"nutrients_id":meal.nutrients_id,"sugar_in_g":nutrients.sugar_in_g,"protein_in_g": nutrients.protein_in_g, "sodium_in_mg": nutrients.sodium_in_mg, "calories":nutrients.calories, "fat_total_g": nutrients.fat_total_g, "fat_saturated_g": nutrients.fat_saturated_g, "potassium_mg": nutrients.potassium_mg, "cholesterol_mg": nutrients.cholesterol_mg,"carbohydrates_total_g": nutrients.carbohydrates_total_g}
+                                meallist.append(mealent)
+                        return make_response({'mealentries': meallist}, 200)
+                elif patient == None:
+                    return make_response({'error': 'Patient does not exist'},400)
+                elif mealDiary == None:
+                    return make_response({'error': 'Meal Diary does exist for this user'},400)
+        except Exception as e: 
+            db.session.rollback()
+            print(e)
+            return make_response({'error': 'An error has occurred.'},400)    
+
+        
+
+@app.route("/getDailyBreakfastEntries/<pid>", methods = ['GET'])
+@login_required
+@patient_or_caregiver_required
+def getDailyBreakfastEntries(pid):    
+    if request.method =="GET":
+        try:
+            if request.method =="GET":
+                patient= Patients.query.filter_by(pid=pid).first()
+                mealDiary = MealDiary.query.filter_by(pid=pid).first()
+                if patient != None and mealDiary != None:
+                    # allbreakfasts = 
+                    if mealDiary.allmeals != None:
+                        meallist=[]
+                        for meal in mealDiary.allmeals:    
+                            if (meal.mealtype == MealType.BREAKFAST) and (meal.date_and_time.date() == date.today()):                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       
+                                nutrients = Nutrients.query.filter_by(nid=meal.nutrients_id)
+                                mealent = {"portiontype": meal.portiontype, "servingSize": meal.servingSize, "date_and_time":meal.date_and_time, "mealtype": meal.mealtype, "mealOrDrink": meal.mealOrDrink, "meal": meal.meal, "patient_id": meal.pid,"nutrients_id":meal.nutrients_id,"sugar_in_g":nutrients.sugar_in_g,"protein_in_g": nutrients.protein_in_g, "sodium_in_mg": nutrients.sodium_in_mg, "calories":nutrients.calories, "fat_total_g": nutrients.fat_total_g, "fat_saturated_g": nutrients.fat_saturated_g, "potassium_mg": nutrients.potassium_mg, "cholesterol_mg": nutrients.cholesterol_mg,"carbohydrates_total_g": nutrients.carbohydrates_total_g}
+                                meallist.append(mealent)
+                        return make_response({'mealentries': meallist}, 200)
+                elif patient == None:
+                    db.session.rollback()
+                    return make_response({'error': 'Patient does not exist'},400)
+                elif mealDiary == None:
+                    db.session.rollback()
+                    return make_response({'error': 'Meal Diary does exist for this user'},400)
+        except Exception as e: 
+            db.session.rollback()
+            print(e)
+            return make_response({'error': 'An error has occurred.'},400)    
+
+@app.route("/getDailyLunchEntries/<pid>", methods = ['GET'])
+@login_required
+@patient_or_caregiver_required
+def getDailyLunchEntries(pid):    
+    if request.method =="GET":
+        try:
+            if request.method =="GET":
+                patient= Patients.query.filter_by(pid=pid).first()
+                mealDiary = MealDiary.query.filter_by(pid=pid).first()
+                if patient != None and mealDiary != None:
+                    # allbreakfasts = 
+                    if mealDiary.allmeals != None:
+                        meallist=[]
+                        for meal in mealDiary.allmeals:    
+                            if (meal.mealtype == MealType.LUNCH) and (meal.date_and_time.date() == date.today()):                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       
+                                nutrients = Nutrients.query.filter_by(nid=meal.nutrients_id)
+                                mealent = {"portiontype": meal.portiontype, "servingSize": meal.servingSize, "date_and_time":meal.date_and_time, "mealtype": meal.mealtype, "mealOrDrink": meal.mealOrDrink, "meal": meal.meal, "patient_id": meal.pid,"nutrients_id":meal.nutrients_id,"sugar_in_g":nutrients.sugar_in_g,"protein_in_g": nutrients.protein_in_g, "sodium_in_mg": nutrients.sodium_in_mg, "calories":nutrients.calories, "fat_total_g": nutrients.fat_total_g, "fat_saturated_g": nutrients.fat_saturated_g, "potassium_mg": nutrients.potassium_mg, "cholesterol_mg": nutrients.cholesterol_mg,"carbohydrates_total_g": nutrients.carbohydrates_total_g}
+                                meallist.append(mealent)
+                        return make_response({'mealentries': meallist}, 200)
+                elif patient == None:
+                    db.session.rollback()
+                    return make_response({'error': 'Patient does not exist'},400)
+                elif mealDiary == None:
+                    db.session.rollback()
+                    return make_response({'error': 'Meal Diary does exist for this user'},400)
+        except Exception as e: 
+            db.session.rollback()
+            print(e)
+            return make_response({'error': 'An error has occurred.'},400)
+        
+@app.route("/getDailySnacKEntries/<pid>", methods = ['GET'])
+@login_required
+@patient_or_caregiver_required
+def getDailySnackEntries(pid):    
+    if request.method =="GET":
+        try:
+            if request.method =="GET":
+                patient= Patients.query.filter_by(pid=pid).first()
+                mealDiary = MealDiary.query.filter_by(pid=pid).first()
+                if patient != None and mealDiary != None:
+                    # allbreakfasts = 
+                    if mealDiary.allmeals != None:
+                        meallist=[]
+                        for meal in mealDiary.allmeals:    
+                            if (meal.mealtype == MealType.SNACK) and (meal.date_and_time.date() == date.today()):                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       
+                                nutrients = Nutrients.query.filter_by(nid=meal.nutrients_id)
+                                mealent = {"portiontype": meal.portiontype, "servingSize": meal.servingSize, "date_and_time":meal.date_and_time, "mealtype": meal.mealtype, "mealOrDrink": meal.mealOrDrink, "meal": meal.meal, "patient_id": meal.pid,"nutrients_id":meal.nutrients_id,"sugar_in_g":nutrients.sugar_in_g,"protein_in_g": nutrients.protein_in_g, "sodium_in_mg": nutrients.sodium_in_mg, "calories":nutrients.calories, "fat_total_g": nutrients.fat_total_g, "fat_saturated_g": nutrients.fat_saturated_g, "potassium_mg": nutrients.potassium_mg, "cholesterol_mg": nutrients.cholesterol_mg,"carbohydrates_total_g": nutrients.carbohydrates_total_g}
+                                meallist.append(mealent)
+                        return make_response({'mealentries': meallist}, 200)
+                elif patient == None:
+                    db.session.rollback()
+                    return make_response({'error': 'Patient does not exist'},400)
+                elif mealDiary == None:
+                    db.session.rollback()
+                    return make_response({'error': 'Meal Diary does exist for this user'},400)
+        except Exception as e: 
+            db.session.rollback()
+            print(e)
+            return make_response({'error': 'An error has occurred.'},400)
+        
+@app.route("/getDailyBrunchEntries/<pid>", methods = ['GET'])
+@login_required
+@patient_or_caregiver_required
+def getDailyBrunchEntries(pid):    
+    if request.method =="GET":
+        try:
+            if request.method =="GET":
+                patient= Patients.query.filter_by(pid=pid).first()
+                mealDiary = MealDiary.query.filter_by(pid=pid).first()
+                if patient != None and mealDiary != None:
+                    # allbreakfasts = 
+                    if mealDiary.allmeals != None:
+                        meallist=[]
+                        for meal in mealDiary.allmeals:    
+                            if (meal.mealtype == MealType.BRUNCH) and (meal.date_and_time.date() == date.today()):                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       
+                                nutrients = Nutrients.query.filter_by(nid=meal.nutrients_id)
+                                mealent = {"portiontype": meal.portiontype, "servingSize": meal.servingSize, "date_and_time":meal.date_and_time, "mealtype": meal.mealtype, "mealOrDrink": meal.mealOrDrink, "meal": meal.meal, "patient_id": meal.pid,"nutrients_id":meal.nutrients_id,"sugar_in_g":nutrients.sugar_in_g,"protein_in_g": nutrients.protein_in_g, "sodium_in_mg": nutrients.sodium_in_mg, "calories":nutrients.calories, "fat_total_g": nutrients.fat_total_g, "fat_saturated_g": nutrients.fat_saturated_g, "potassium_mg": nutrients.potassium_mg, "cholesterol_mg": nutrients.cholesterol_mg,"carbohydrates_total_g": nutrients.carbohydrates_total_g}
+                                meallist.append(mealent)
+                        return make_response({'mealentries': meallist}, 200)
+                elif patient == None:
+                    db.session.rollback()
+                    return make_response({'error': 'Patient does not exist'},400)
+                elif mealDiary == None:
+                    db.session.rollback()
+                    return make_response({'error': 'Meal Diary does exist for this user'},400)
+        except Exception as e: 
+            db.session.rollback()
+            print(e)
+            return make_response({'error': 'An error has occurred.'},400)
+        
+@app.route("/getDailyDessertEntries/<pid>", methods = ['GET'])
+@login_required
+@patient_or_caregiver_required
+def getDailyDessertEntries(pid):    
+    if request.method =="GET":
+        try:
+            if request.method =="GET":
+                patient= Patients.query.filter_by(pid=pid).first()
+                mealDiary = MealDiary.query.filter_by(pid=pid).first()
+                if patient != None and mealDiary != None:
+                    # allbreakfasts = 
+                    if mealDiary.allmeals != None:
+                        meallist=[]
+                        for meal in mealDiary.allmeals:    
+                            if (meal.mealtype == MealType.DESSERT) and (meal.date_and_time.date() == date.today()):                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       
+                                nutrients = Nutrients.query.filter_by(nid=meal.nutrients_id)
+                                mealent = {"portiontype": meal.portiontype, "servingSize": meal.servingSize, "date_and_time":meal.date_and_time, "mealtype": meal.mealtype, "mealOrDrink": meal.mealOrDrink, "meal": meal.meal, "patient_id": meal.pid,"nutrients_id":meal.nutrients_id,"sugar_in_g":nutrients.sugar_in_g,"protein_in_g": nutrients.protein_in_g, "sodium_in_mg": nutrients.sodium_in_mg, "calories":nutrients.calories, "fat_total_g": nutrients.fat_total_g, "fat_saturated_g": nutrients.fat_saturated_g, "potassium_mg": nutrients.potassium_mg, "cholesterol_mg": nutrients.cholesterol_mg,"carbohydrates_total_g": nutrients.carbohydrates_total_g}
+                                meallist.append(mealent)
+                        return make_response({'mealentries': meallist}, 200)
+                elif patient == None:
+                    db.session.rollback()
+                    return make_response({'error': 'Patient does not exist'},400)
+                elif mealDiary == None:
+                    db.session.rollback()
+                    return make_response({'error': 'Meal Diary does exist for this user'},400)
+        except Exception as e: 
+            db.session.rollback()
+            print(e)
+            return make_response({'error': 'An error has occurred.'},400)
+
+@app.route("/getDailyBeverageEntries/<pid>", methods = ['GET'])
+@login_required
+@patient_or_caregiver_required
+def getDailyBeverageEntries(pid):    
+    if request.method =="GET":
+        try:
+            if request.method =="GET":
+                patient= Patients.query.filter_by(pid=pid).first()
+                mealDiary = MealDiary.query.filter_by(pid=pid).first()
+                if patient != None and mealDiary != None:
+                    # allbreakfasts = 
+                    if mealDiary.allmeals != None:
+                        meallist=[]
+                        for meal in mealDiary.allmeals:    
+                            if (meal.mealtype == MealType.BEVERAGE) and (meal.date_and_time.date() == date.today()):                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       
+                                nutrients = Nutrients.query.filter_by(nid=meal.nutrients_id)
+                                mealent = {"portiontype": meal.portiontype, "servingSize": meal.servingSize, "date_and_time":meal.date_and_time, "mealtype": meal.mealtype, "mealOrDrink": meal.mealOrDrink, "meal": meal.meal, "patient_id": meal.pid,"nutrients_id":meal.nutrients_id,"sugar_in_g":nutrients.sugar_in_g,"protein_in_g": nutrients.protein_in_g, "sodium_in_mg": nutrients.sodium_in_mg, "calories":nutrients.calories, "fat_total_g": nutrients.fat_total_g, "fat_saturated_g": nutrients.fat_saturated_g, "potassium_mg": nutrients.potassium_mg, "cholesterol_mg": nutrients.cholesterol_mg,"carbohydrates_total_g": nutrients.carbohydrates_total_g}
+                                meallist.append(mealent)
+                        return make_response({'mealentries': meallist}, 200)
+                elif patient == None:
+                    db.session.rollback()
+                    return make_response({'error': 'Patient does not exist'},400)
+                elif mealDiary == None:
+                    db.session.rollback()
+                    return make_response({'error': 'Meal Diary does exist for this user'},400)
+        except Exception as e:  
+            db.session.rollback()
+            print(e)
+            return make_response({'error': 'An error has occurred.'},400)
+
+@app.route("/getAllBeveragesEntries/<pid>", methods = ['GET'])
+@login_required
+@patient_or_caregiver_required
+def getBeverageEntries(pid):    
+    if request.method =="GET":
+        try:
+            if request.method =="GET":
+                patient= Patients.query.filter_by(pid=pid).first()
+                mealDiary = MealDiary.query.filter_by(pid=pid).first()
+                if patient != None and mealDiary != None:
+                    # allbreakfasts = 
+                    if mealDiary.allmeals != None:
+                        meallist=[]
+                        for meal in mealDiary.allmeals:    
+                            if meal.mealtype == MealType.BEVERAGE:                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            
+                                nutrients = Nutrients.query.filter_by(nid=meal.nutrients_id)
+                                mealent = {"portiontype": meal.portiontype, "servingSize": meal.servingSize, "date_and_time":meal.date_and_time, "mealtype": meal.mealtype, "mealOrDrink": meal.mealOrDrink, "meal": meal.meal, "patient_id": meal.pid,"nutrients_id":meal.nutrients_id,"sugar_in_g":nutrients.sugar_in_g,"protein_in_g": nutrients.protein_in_g, "sodium_in_mg": nutrients.sodium_in_mg, "calories":nutrients.calories, "fat_total_g": nutrients.fat_total_g, "fat_saturated_g": nutrients.fat_saturated_g, "potassium_mg": nutrients.potassium_mg, "cholesterol_mg": nutrients.cholesterol_mg,"carbohydrates_total_g": nutrients.carbohydrates_total_g}
+                                meallist.append(mealent)
+                        return make_response({'mealentries': meallist}, 200)
+                elif patient == None:
+                    db.session.rollback()
+                    return make_response({'error': 'Patient does not exist'},400)
+                elif mealDiary == None:
+                    db.session.rollback()
+                    return make_response({'error': 'Meal Diary does exist for this user'},400)
+        except Exception as e: 
+            db.session.rollback()
+            print(e)
+            return make_response({'error': 'An error has occurred.'},400)    
+
+@app.route("/getAllLunchEntries/<pid>", methods = ['GET'])
+@login_required
+@patient_or_caregiver_required
+def getLunchEntries(pid):    
+    if request.method =="GET":
+        try:
+            if request.method =="GET":
+                patient= Patients.query.filter_by(pid=pid).first()
+                mealDiary = MealDiary.query.filter_by(pid=pid).first()
+                if patient != None and mealDiary != None:
+                    # allbreakfasts = 
+                    if mealDiary.allmeals != None:
+                        meallist=[]
+                        for meal in mealDiary.allmeals:    
+                            if meal.mealtype == MealType.LUNCH:                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            
+                                nutrients = Nutrients.query.filter_by(nid=meal.nutrients_id)
+                                mealent = {"portiontype": meal.portiontype, "servingSize": meal.servingSize, "date_and_time":meal.date_and_time, "mealtype": meal.mealtype, "mealOrDrink": meal.mealOrDrink, "meal": meal.meal, "patient_id": meal.pid,"nutrients_id":meal.nutrients_id,"sugar_in_g":nutrients.sugar_in_g,"protein_in_g": nutrients.protein_in_g, "sodium_in_mg": nutrients.sodium_in_mg, "calories":nutrients.calories, "fat_total_g": nutrients.fat_total_g, "fat_saturated_g": nutrients.fat_saturated_g, "potassium_mg": nutrients.potassium_mg, "cholesterol_mg": nutrients.cholesterol_mg,"carbohydrates_total_g": nutrients.carbohydrates_total_g}
+                                meallist.append(mealent)
+                        return make_response({'mealentries': meallist}, 200)
+                elif patient == None:
+                    db.session.rollback()
+                    return make_response({'error': 'Patient does not exist'},400)
+                elif mealDiary == None:
+                    db.session.rollback()
+                    return make_response({'error': 'Meal Diary does exist for this user'},400)
+        except Exception as e: 
+            db.session.rollback()
+            print(e)
+            return make_response({'error': 'An error has occurred.'},400)    
+
+@app.route("/getAllDinnerEntries/<pid>", methods = ['GET'])
+@login_required
+@patient_or_caregiver_required
+def getDinnerEntries(pid):    
+    if request.method =="GET":
+        try:
+            if request.method =="GET":
+                patient= Patients.query.filter_by(pid=pid).first()
+                mealDiary = MealDiary.query.filter_by(pid=pid).first()
+                if patient != None and mealDiary != None:
+                    # allbreakfasts = 
+                    if mealDiary.allmeals != None:
+                        meallist=[]
+                        for meal in mealDiary.allmeals:    
+                            if meal.mealtype == MealType.DINNER:                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            
+                                nutrients = Nutrients.query.filter_by(nid=meal.nutrients_id)
+                                mealent = {"portiontype": meal.portiontype, "servingSize": meal.servingSize, "date_and_time":meal.date_and_time, "mealtype": meal.mealtype, "mealOrDrink": meal.mealOrDrink, "meal": meal.meal, "patient_id": meal.pid,"nutrients_id":meal.nutrients_id,"sugar_in_g":nutrients.sugar_in_g,"protein_in_g": nutrients.protein_in_g, "sodium_in_mg": nutrients.sodium_in_mg, "calories":nutrients.calories, "fat_total_g": nutrients.fat_total_g, "fat_saturated_g": nutrients.fat_saturated_g, "potassium_mg": nutrients.potassium_mg, "cholesterol_mg": nutrients.cholesterol_mg,"carbohydrates_total_g": nutrients.carbohydrates_total_g}
+                                meallist.append(mealent)
+                        return make_response({'mealentries': meallist}, 200)
+                elif patient == None:
+                    db.session.rollback()
+                    return make_response({'error': 'Patient does not exist'},400)
+                elif mealDiary == None:
+                    db.session.rollback()
+                    return make_response({'error': 'Meal Diary does exist for this user'},400)
+        except Exception as e: 
+            db.session.rollback()
+            print(e)
+            return make_response({'error': 'An error has occurred.'},400)    
+
+@app.route("/getAllBrunchEntries/<pid>", methods = ['GET'])
+@login_required
+@patient_or_caregiver_required
+def getBrunchEntries(pid):    
+    if request.method =="GET":
+        try:
+            if request.method =="GET":
+                patient= Patients.query.filter_by(pid=pid).first()
+                mealDiary = MealDiary.query.filter_by(pid=pid).first()
+                if patient != None and mealDiary != None:
+                    # allbreakfasts = 
+                    if mealDiary.allmeals != None:
+                        meallist=[]
+                        for meal in mealDiary.allmeals:    
+                            if meal.mealtype == MealType.BRUNCH:                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            
+                                nutrients = Nutrients.query.filter_by(nid=meal.nutrients_id)
+                                mealent = {"portiontype": meal.portiontype, "servingSize": meal.servingSize, "date_and_time":meal.date_and_time, "mealtype": meal.mealtype, "mealOrDrink": meal.mealOrDrink, "meal": meal.meal, "patient_id": meal.pid,"nutrients_id":meal.nutrients_id,"sugar_in_g":nutrients.sugar_in_g,"protein_in_g": nutrients.protein_in_g, "sodium_in_mg": nutrients.sodium_in_mg, "calories":nutrients.calories, "fat_total_g": nutrients.fat_total_g, "fat_saturated_g": nutrients.fat_saturated_g, "potassium_mg": nutrients.potassium_mg, "cholesterol_mg": nutrients.cholesterol_mg,"carbohydrates_total_g": nutrients.carbohydrates_total_g}
+                                meallist.append(mealent)
+                        return make_response({'mealentries': meallist}, 200)
+                elif patient == None:
+                    db.session.rollback()
+                    return make_response({'error': 'Patient does not exist'},400)
+                elif mealDiary == None:
+                    db.session.rollback()
+                    return make_response({'error': 'Meal Diary does exist for this user'},400)
+        except Exception as e: 
+            db.session.rollback()
+            print(e)
+            return make_response({'error': 'An error has occurred.'},400)    
+
+@app.route("/getAllSnackEntries/<pid>", methods = ['GET'])
+@login_required
+@patient_or_caregiver_required
+def getSnackEntries(pid):    
+    if request.method =="GET":
+        try:
+            if request.method =="GET":
+                patient= Patients.query.filter_by(pid=pid).first()
+                mealDiary = MealDiary.query.filter_by(pid=pid).first()
+                if patient != None and mealDiary != None:
+                    # allbreakfasts = 
+                    if mealDiary.allmeals != None:
+                        meallist=[]
+                        for meal in mealDiary.allmeals:    
+                            if meal.mealtype == MealType.SNACK:                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            
+                                nutrients = Nutrients.query.filter_by(nid=meal.nutrients_id)
+                                mealent = {"portiontype": meal.portiontype, "servingSize": meal.servingSize, "date_and_time":meal.date_and_time, "mealtype": meal.mealtype, "mealOrDrink": meal.mealOrDrink, "meal": meal.meal, "patient_id": meal.pid,"nutrients_id":meal.nutrients_id,"sugar_in_g":nutrients.sugar_in_g,"protein_in_g": nutrients.protein_in_g, "sodium_in_mg": nutrients.sodium_in_mg, "calories":nutrients.calories, "fat_total_g": nutrients.fat_total_g, "fat_saturated_g": nutrients.fat_saturated_g, "potassium_mg": nutrients.potassium_mg, "cholesterol_mg": nutrients.cholesterol_mg,"carbohydrates_total_g": nutrients.carbohydrates_total_g}
+                                meallist.append(mealent)
+                        return make_response({'mealentries': meallist}, 200)
+                elif patient == None:
+                    db.session.rollback()
+                    return make_response({'error': 'Patient does not exist'},400)
+                elif mealDiary == None:
+                    db.session.rollback()
+                    return make_response({'error': 'Meal Diary does exist for this user'},400)
+        except Exception as e: 
+            db.session.rollback()
+            print(e)
+            return make_response({'error': 'An error has occurred.'},400)   
+        
+@app.route("/getAllDessertEntries/<pid>", methods = ['GET']) #VIEW
+@login_required
+@patient_or_caregiver_required
+def getDessertEntries(pid):    
+    if request.method =="GET":
+        try:
+            if request.method =="GET":
+                patient= Patients.query.filter_by(pid=pid).first()
+                mealDiary = MealDiary.query.filter_by(pid=pid).first()
+                if patient != None and mealDiary != None:
+                    # allbreakfasts = 
+                    if mealDiary.allmeals != None:
+                        meallist=[]
+                        for meal in mealDiary.allmeals:    
+                            if meal.mealtype == MealType.DESSERT:                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            
+                                nutrients = Nutrients.query.filter_by(nid=meal.nutrients_id)
+                                mealent = {"portiontype": meal.portiontype, "servingSize": meal.servingSize, "date_and_time":meal.date_and_time, "mealtype": meal.mealtype, "mealOrDrink": meal.mealOrDrink, "meal": meal.meal, "patient_id": meal.pid,"nutrients_id":meal.nutrients_id,"sugar_in_g":nutrients.sugar_in_g,"protein_in_g": nutrients.protein_in_g, "sodium_in_mg": nutrients.sodium_in_mg, "calories":nutrients.calories, "fat_total_g": nutrients.fat_total_g, "fat_saturated_g": nutrients.fat_saturated_g, "potassium_mg": nutrients.potassium_mg, "cholesterol_mg": nutrients.cholesterol_mg,"carbohydrates_total_g": nutrients.carbohydrates_total_g}
+                                meallist.append(mealent)
+                        return make_response({'mealentries': meallist}, 200)
+                elif patient == None:
+                    db.session.rollback()
+                    return make_response({'error': 'Patient does not exist'},400)
+                elif mealDiary == None:
+                    db.session.rollback()
+                    return make_response({'error': 'Meal Diary does exist for this user'},400)
+        except Exception as e: 
+            db.session.rollback()
+            print(e)
+            return make_response({'error': 'An error has occurred.'},400)  
+           
 
 
+@app.route("/recordSymptoms/<pid>", methods=['POST','GET']) # patient personally adds their recordBloodSugar Levels
+@login_required
+@patient_or_caregiver_required
+def recordSymptoms(pid):
+    if request.method =="POST":
+        try: 
+            content = request.get_json()
+            
+        except Exception as e: 
+            db.session.rollback()
+            print(e)
+            return make_response({'error': 'An error has occurred.'},400)  
 
 @app.route('/<file_name>.txt')
 def send_text_file(file_name):

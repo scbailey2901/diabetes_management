@@ -407,10 +407,11 @@ class MealEntry(db.Model):
     mealOrDrink = db.Column(db.Enum(FoodOrDrink))
     meal = db.Column(db.String(250))
     pid = db.Column(db.Integer, db.ForeignKey('patients.pid'))
-    nutrients_id = db.Column(db.Integer, db.ForeignKey('nutrients.nid'))
+    nutrients = db.relationship('Nutrients', backref='mealentry', lazy=True)
     mealdiaryid = db.Column(db.Integer, db.ForeignKey('mealdiary.mdid'))
+    audits = db.relationship('MealEntryAudit', backref='mealentry', lazy=True)
     
-    def __init__(self, portiontype, servingSize, date_and_time, mealtype, mealOrDrink, meal, pid, nutrients_id):
+    def __init__(self, portiontype, servingSize, date_and_time, mealtype, mealOrDrink, meal, pid):
         self.portiontype = portiontype
         self.servingSize = servingSize
         self.date_and_time = date_and_time
@@ -418,7 +419,18 @@ class MealEntry(db.Model):
         self.mealOrDrink = mealOrDrink
         self.meal = meal 
         self.pid = pid
-        self.nutrients_id = nutrients_id
+        # self.nutrients_id = nutrients_id
+        
+class MealEntryAudit(db.Model):
+    __tablename__ = "medicationaudit"
+    me_auid= db.Column(db.Integer, primary_key=True, autoincrement=True)
+    meid = db.Column(db.Integer, db.ForeignKey('mealentry.meid'))
+    updated_at = db.Column(db.DateTime, default=datetime.now)
+    updated_by = db.Column(db.String(256))
+    
+    def __init__(self, mid, updated_by):
+        self.mid = mid
+        self.updated_by = updated_by
 
 class MealDiary(db.Model):
     __tablename__ = "mealdiary"
@@ -442,9 +454,10 @@ class Nutrients(db.Model):
     potassium_mg = db.Column(db.Float)
     cholesterol_mg = db.Column(db.Float)
     carbohydrates_total_g = db.Column(db.Float)
-    mealentry = db.relationship('MealEntry', backref='nutrients', lazy=True)
+    meid = db.Column(db.Integer, db.ForeignKey('mealentry.nid'))
     
-    def __init__(self, sugar_in_g, protein_in_g, sodium_in_mg, calories, fat_total_g, fat_saturated_g, potassium_mg, cholesterol_mg, carbohydrates_total_g):
+    
+    def __init__(self, sugar_in_g, protein_in_g, sodium_in_mg, calories, fat_total_g, fat_saturated_g, potassium_mg, cholesterol_mg, carbohydrates_total_g, meid):
         self.sugar_in_g = sugar_in_g
         self.protein_in_g = protein_in_g
         self.sodium_in_mg = sodium_in_mg
@@ -454,4 +467,5 @@ class Nutrients(db.Model):
         self.potassium_mg = potassium_mg
         self.cholesterol_mg = cholesterol_mg
         self.carbohydrates_total_g = carbohydrates_total_g
+        self.meid = meid
         
