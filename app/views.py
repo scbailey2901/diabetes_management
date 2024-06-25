@@ -8,6 +8,8 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from flask import current_app
 from flask_socketio import SocketIO
 from flask_socketio import emit
+import nltk
+import medspacy #do pip install medspacy
 # from flask_cors import CORS, cross_origin
 # from twilio.rest import Client
 # import schedule
@@ -27,7 +29,7 @@ from flask_wtf.csrf import generate_csrf
 from werkzeug.utils import secure_filename
 from dotenv import load_dotenv
 import re
-from app.models import Patients, Caregivers, BloodSugarLevels, Credentials, HealthRecord, CaregiverType, Gender, CredentialType, AlertType, Alert, Medication, MedicationAudit, MealDiary, MealEntry, MealType, Nutrients, FoodOrDrink, DiabetesType, RecTime, MedicationTime
+from app.models import Patients, Caregivers, BloodSugarLevels, Credentials, HealthRecord, CaregiverType, Gender, CredentialType, AlertType, Alert, Medication, MedicationAudit, MealDiary, MealEntry, MealType, Nutrients, FoodOrDrink, DiabetesType, RecTime, MedicationTime, Symptom, SymptomType
 from flask_migrate import Migrate
 
     
@@ -39,7 +41,7 @@ import psycopg2
 
 load_dotenv()
 
-
+nlp = medspacy.load()
 
 @app.route('/api/v1/csrf-token', methods=['GET'])
 def get_csrf():
@@ -1153,11 +1155,151 @@ def recordSymptoms(pid):
     if request.method =="POST":
         try: 
             content = request.get_json()
-            
+            notes = content['notes']
+            date_and_time = content['date_and_time']
+            date_and_time = datetime.strptime(date_and_time, "%m/%d/%Y %H:%M").date()
+            patient= Patients.query.filter_by(pid=pid).first()
+            if patient.name == current_user.name or current_user in patient.caregivers: 
+                if content['category'] == "mood":
+                    symptom_name = content['severity']+"Mood"
+                    if content['severity'].lower() == "depressed":
+                        severity = 5
+                        symptomType = SymptomType.MOOD
+                        symptom=Symptom(symptom_name, symptomType,severity,date_and_time,notes, pid, HealthRecord.query.filter_by(patient_id=pid).first().hrid )
+                        db.session.add(symptom)
+                        db.session.commit()
+                    elif content['severity'].lower() == "sad":
+                        severity = 4
+                        symptomType = SymptomType.MOOD
+                        symptom=Symptom(symptom_name, symptomType,severity,date_and_time,notes, pid, HealthRecord.query.filter_by(patient_id=pid).first().hrid )
+                        db.session.add(symptom)
+                        db.session.commit()
+                    elif content['severity'].lower() == "ok":
+                        severity = 3
+                        symptomType = SymptomType.MOOD
+                        symptom=Symptom(symptom_name, symptomType,severity,date_and_time,notes, pid, HealthRecord.query.filter_by(patient_id=pid).first().hrid )
+                        db.session.add(symptom)
+                        db.session.commit() 
+                    elif content['severity'].lower() == "good":
+                        severity = 2
+                        symptomType = SymptomType.MOOD  
+                        symptom=Symptom(symptom_name, symptomType,severity,date_and_time,notes, pid, HealthRecord.query.filter_by(patient_id=pid).first().hrid )
+                        db.session.add(symptom)
+                        db.session.commit()
+                    elif content['severity'].lower() == "excellent":
+                        severity = 1
+                        symptomType = SymptomType.MOOD  
+                        symptom=Symptom(symptom_name, symptomType,severity,date_and_time,notes, pid, HealthRecord.query.filter_by(patient_id=pid).first().hrid )
+                        db.session.add(symptom)
+                        db.session.commit()
+                elif content['category'] == "sleep":
+                    symptom_name = content['severity'] +"Sleep"
+                    if content['severity'].lower() == "terrible":
+                        severity = 5
+                        symptomType = SymptomType.SLEEP
+                        symptom=Symptom(symptom_name, symptomType,severity,date_and_time,notes, pid, HealthRecord.query.filter_by(patient_id=pid).first().hrid )
+                        db.session.add(symptom)
+                        db.session.commit()
+                    elif content['severity'].lower() == "bad":
+                        severity = 4
+                        symptomType = SymptomType.SLEEP
+                        symptom=Symptom(symptom_name, symptomType,severity,date_and_time,notes, pid, HealthRecord.query.filter_by(patient_id=pid).first().hrid )
+                        db.session.add(symptom)
+                        db.session.commit()
+                    elif content['severity'].lower() == "ok":
+                        severity = 3
+                        symptomType = SymptomType.SLEEP
+                        symptom=Symptom(symptom_name, symptomType,severity,date_and_time,notes, pid, HealthRecord.query.filter_by(patient_id=pid).first().hrid )
+                        db.session.add(symptom)
+                        db.session.commit()
+                    elif content['severity'].lower() == "good":
+                        severity = 2
+                        symptomType = SymptomType.SLEEP
+                        symptom=Symptom(symptom_name, symptomType,severity,date_and_time,notes, pid, HealthRecord.query.filter_by(patient_id=pid).first().hrid )
+                        db.session.add(symptom)
+                        db.session.commit()
+                    elif content['severity'].lower() == "excellent":
+                        severity = 1
+                        symptomType = SymptomType.SLEEP
+                        symptom=Symptom(symptom_name, symptomType,severity,date_and_time,notes, pid, HealthRecord.query.filter_by(patient_id=pid).first().hrid )
+                        db.session.add(symptom)
+                        db.session.commit()
+                elif content['category'] == "appetite":
+                    symptom_name = content['severity'] +"Appetite"
+                    if content['severity'].lower() == "none":
+                        severity = 5
+                        symptomType = SymptomType.APPETITE
+                        symptom=Symptom(symptom_name, symptomType,severity,date_and_time,notes, pid, HealthRecord.query.filter_by(patient_id=pid).first().hrid )
+                        db.session.add(symptom)
+                        db.session.commit()
+                    elif content['severity'].lower() == "less than normal":
+                        severity = 4
+                        symptomType = SymptomType.APPETITE
+                        symptom=Symptom(symptom_name, symptomType,severity,date_and_time,notes, pid, HealthRecord.query.filter_by(patient_id=pid).first().hrid )
+                        db.session.add(symptom)
+                        db.session.commit()
+                    elif content['severity'].lower() == "normal":
+                        severity = 3
+                        symptomType = SymptomType.APPETITE
+                        symptom=Symptom(symptom_name, symptomType,severity,date_and_time,notes, pid, HealthRecord.query.filter_by(patient_id=pid).first().hrid )
+                        db.session.add(symptom)
+                        db.session.commit()
+                    elif content['severity'].lower() == "more than normal":
+                        severity = 2
+                        symptomType = SymptomType.APPETITE 
+                        symptom=Symptom(symptom_name, symptomType,severity,date_and_time,notes, pid, HealthRecord.query.filter_by(patient_id=pid).first().hrid )
+                        db.session.add(symptom)
+                        db.session.commit()
+                    elif content['severity'].lower() == "excessive":
+                        severity = 1
+                        symptomType = SymptomType.APPETITE 
+                        symptom=Symptom(symptom_name, symptomType,severity,date_and_time,notes, pid, HealthRecord.query.filter_by(patient_id=pid).first().hrid )
+                        db.session.add(symptom)
+                        db.session.commit()
+                elif content['category'].lower() == "other":
+                    symptom_name = content['symptom_name'].lower()
+                    severity = content['severity']
+                    symptomType = SymptomType.OTHER
+                    symptoms = nlp(symptom_name)
+                    vals = [{"text":i.text, "label": i.label} for i in symptoms.ent]
+                    for j in vals: 
+                        if j['label'] == "SYMPTOM":
+                            symptom_name = j['text']
+                            symptom=Symptom(symptom_name, symptomType,severity,date_and_time,notes, pid, HealthRecord.query.filter_by(patient_id=pid).first().hrid )
+                            db.session.add(symptom)
+                            db.session.commit()
+                
+                return make_response({'success': 'Symptom has been created successfully'},200)
+            return make_response({'error': 'User is not authorised to edit this meal entry.'},400)
         except Exception as e: 
             db.session.rollback()
             print(e)
             return make_response({'error': 'An error has occurred.'},400)  
+
+@app.route("/deleteSymptom/<sid>", methods=['GET','DELETE'])
+@login_required
+@patient_or_caregiver_required
+def deleteSymptom(sid):
+    try:
+        if request.method == "DELETE":
+            symptom = Symptom.query.filter_by(sid=sid).first()
+            if symptom != None:
+                hr=HealthRecord.query.filter_by(hrid = symptom.hrid) 
+                db.session.delete(symptom)
+                for i in hr.symptoms:
+                    if i.sid == sid:
+                        db.session.delete(i)
+                db.session.commit()
+                if Medication.query.filter_by(sid=sid).first() == None:
+                    return make_response({'success': 'The symptom has been deleted successfully.'},400)
+                else:
+                    return make_response({'error': 'An error occurred during the attempt to delete this symptom.'},400)
+            return make_response({'error': 'Symptom was not found.'},404)
+    except Exception as e: 
+            db.session.rollback()
+            print(e)
+            return make_response({'error': 'An error has occurred.'},400)
+
 
 @app.route('/<file_name>.txt')
 def send_text_file(file_name):

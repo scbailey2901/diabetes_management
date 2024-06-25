@@ -36,7 +36,7 @@ class AlertType(Enum):
 class SymptomType(Enum):
     MOOD = "mood"
     SLEEP = "sleep"
-    APETITE = "apetite"
+    APPETITE = "apetite"
     ACTIVITY = "activity"
     OTHER= "other"
 
