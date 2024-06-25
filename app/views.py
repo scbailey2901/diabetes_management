@@ -8,7 +8,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from flask import current_app
 from flask_socketio import SocketIO
 from flask_socketio import emit
-import nltk
+# import nltk
 import medspacy #do pip install medspacy
 # from flask_cors import CORS, cross_origin
 # from twilio.rest import Client
@@ -750,7 +750,7 @@ def getDailyMealEntries(pid):
             print(e)
             return make_response({'error': 'An error has occurred.'},400)    
         
-@app.route("/getMonthlyMealEntries/<pid>", methods = ['GET'])
+@app.route('/getMonthlyMealEntries/<pid>', methods = ['GET'])
 @login_required
 @patient_or_caregiver_required
 def getMonthlyMealEntries(pid):    
@@ -1300,6 +1300,89 @@ def deleteSymptom(sid):
             print(e)
             return make_response({'error': 'An error has occurred.'},400)
 
+@app.route("/searchCaregiver/<pid>", methods=['GET', "POST"])
+@login_required
+@patient_or_caregiver_required
+def searchCaregiver(pid):
+    if request.method =="POST":
+        try:
+            content = request.get_json()
+            search = content['search']
+            if Caregivers.query.filter_by(name = search).all() != None:
+                caregiver = Caregivers.query.filter(name = search).first()
+                caregiver = {"caregiver_id" : caregiver.cid, "name": caregiver.name, "username":caregiver.username,"type": caregiver.type.value}
+                return make_response({"caregiver":caregiver})
+            elif Caregivers.query.filter_by(username = search).first():
+                caregiver = Caregivers.query.filter_by(username = search).first()
+                caregiver = {"caregiver_id" : caregiver.cid, "name": caregiver.name, "username":caregiver.username,"type": caregiver.type.value}
+                return make_response({"caregiver" : caregiver})
+            elif Patients.query.filter_by(username = search).first() or Patients.query.filter_by(name = search).first():
+                return make_response({'error': 'User is not a registered Caregiver.'},400)
+            else: 
+                return make_response({'error': 'Caregiver was not found'},404)
+        except Exception as e: 
+            db.session.rollback()
+            print(e)
+            return make_response({'error': 'An error has occurred.'},400)    
+
+@app.route("/addCaregiver/<pid>", methods=['POST'])
+@login_required
+@patient_or_caregiver_required
+def addCaregiver(pid):
+    if request.method =="POST":
+        try:
+            content = request.get_json()
+            cid = content['cid']
+            if Caregivers.query.filter_by(cid = cid).first() != None:
+                caregiver = Caregivers.query.filter_by(cid = cid).first()
+            elif Patients.query.filter_by(cid = cid).first() or Patients.query.filter_by(cid = cid).first():
+                return make_response({'error': 'User is not a registered Caregiver.'},400)
+            else: 
+                return make_response({'error': 'Caregiver was not found'},404)
+            
+            if ((current_user.name) == (Patients.query.filter_by(pid = pid).first().name)) or current_user in Patients.query.filter_by(pid = pid).first().caregivers:
+                Patients.query.filter_by(pid = pid).first().caregivers.append(caregiver)
+                db.session.commit()
+                return make_response({'success': 'Caregiver was added successfully.'})
+            else:
+                return make_response({'error': 'User is not authorized to add a caregiver for '+ Patients.query.filter_by(pid = pid).first().name },400)
+            
+        except Exception as e: 
+            db.session.rollback()
+            print(e)
+            return make_response({'error': 'An error has occurred.'},400)
+
+@app.route("/removeCaregiver/<cid>", methods=['DELETE'])
+@login_required
+@patient_or_caregiver_required
+def removeCaregiver(cid):
+    if request.method =="DELETE":
+        try:
+            caregiver = Caregivers.query.filter_by(cid = cid).first()
+            if caregiver != None:
+                if Patients.query.filter_by(name = current_user.name).first() != None and caregiver in patient = Patients.query.filter_by(name = current_user.name).first().caregivers:
+                    db.session.delete(caregiver)
+                    db.session.commit()
+                
+                
+        except Exception as e: 
+            db.session.rollback()
+            print(e)
+            return make_response({'error': 'An error has occurred.'},400) 
+        
+
+            medication = Medication.query.filter_by(mid=mid).first()
+            if medication != None:
+           
+
+
+# @app.route('/authorize')
+# def authorize():
+#     fitbit_auth_url = 'https://www.fitbit.com/oauth2/authorize'
+#     response_type = 'code'
+#     scope = 'activity'
+#     return redirect(f'{fitbit_auth_url}?response_type={response_type}&client_id={CLIENT_ID}&redirect_uri={REDIRECT_URI}&scope={scope}')
+    
 
 @app.route('/<file_name>.txt')
 def send_text_file(file_name):

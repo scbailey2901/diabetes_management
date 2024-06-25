@@ -5,8 +5,7 @@ from flask_sqlalchemy import SQLAlchemy
 from .config import Config
 from flask_socketio import SocketIO
 socketio = SocketIO()
-# from flask_apscheduler import APScheduler 
-# from apscheduler.schedulers.background import BackgroundScheduler
+# from flask_oauthlib.client import OAuth
 app = Flask(__name__)
 
 
@@ -20,5 +19,18 @@ login_manager = LoginManager()
 login_manager.init_app(app)
 socketio.init_app(app)
 login_manager.login_view = 'login'
+# oauth = OAuth(app)
+
+# wearable = oauth.remote_app(
+#     'wearable',
+#     consumer_key=app.config['WEARABLE_CLIENT_ID'],
+#     consumer_secret=app.config['WEARABLE_CLIENT_SECRET'],
+#     request_token_params={'scope': 'read'},
+#     base_url='https://api.wearable.com/',
+#     request_token_url=None,
+#     access_token_method='POST',
+#     access_token_url='https://api.wearable.com/oauth2/token',
+#     authorize_url='https://api.wearable.com/oauth2/authorize'
+# )
 
 from app import views, models
