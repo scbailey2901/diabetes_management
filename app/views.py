@@ -643,7 +643,7 @@ def createMealEntry(pid):
             portiontype = content["portiontype"]
             servingSize = content['servingSize']
             date_and_time = content['date_and_time']
-            date_and_time = datetime.strptime(date_and_time, "%m/%d/%Y %H:%M").date()
+            date_and_time = datetime.strptime(date_and_time, "%m/%d/%Y %I:%M %p").date()
             if content['mealtype'].lower() == "beverage":
                 mealtype = MealType.BEVERAGE 
             elif content['mealtype'].lower() == "breakfast":
@@ -672,32 +672,44 @@ def createMealEntry(pid):
             if isCreatorReal and patient:
                 patient =Patients.query.filter_by(pid=pid).first()
                 api_url = 'https://api.calorieninjas.com/v1/nutrition?query='
-                query = servingSize+ " "+ portiontype + " " + meal 
-                response = requests.get(api_url + query, headers={'X-Api-Key': 'UdjAYE21RFKdvFnrUhM25g==xL6FYYElHVpuQrAJ'})
-                if response.status_code == requests.codes.ok:
-                    print(response.text)
-                    nutrients_data = response.json().get('items', [])[0]
-                    sugar_in_g = nutrients_data['sugar_g']
-                    protein_in_g = nutrients_data['protein_in_g']
-                    sodium_in_mg = nutrients_data['sodium_in_mg']
-                    calories = nutrients_data['calories']
-                    fat_total_g = nutrients_data['fat_total_g']
-                    fat_saturated_g = nutrients_data['fat_saturated_g']
-                    potassium_mg = nutrients_data['potassium_mg']
-                    cholesterol_mg = nutrients_data['cholesterol_mg']
-                    carbohydrates_total_g = nutrients_data['carbohydrates_total_g']
-                    mealentry= MealEntry(portiontype,servingSize,date_and_time,mealtype,mealOrDrink,meal,pid)
-                    db.session.add(mealentry)
-                    db.session.commit()
-                    mealEntry = MealEntry.query.filter_by(meal=meal).first()
-                    nutrients = Nutrients(sugar_in_g, protein_in_g,sodium_in_mg, calories,fat_total_g,fat_saturated_g, potassium_mg, cholesterol_mg, carbohydrates_total_g,mealEntry.meid)
-                    db.session.add(nutrients)
-                    db.session.commit()
-                    mealDiary = MealDiary(pid)
-                    db.session.add(mealDiary)
-                    db.session.commit()
-                else: 
-                    return make_response({'error': response.text},response.status_code)
+                query = str(servingSize)+ " "+ portiontype + " " + meal 
+                try:
+                    response = requests.get(api_url + query, headers={'X-Api-Key': 'UdjAYE21RFKdvFnrUhM25g==xL6FYYElHVpuQrAJ'})
+                    if response.status_code == requests.codes.ok:
+                        nutrients_data = response.json().get('items', [])
+                        if nutrients_data: 
+                            for i in nutrients_data:
+                                sugar_in_g = i['sugar_g']
+                                protein_in_g = i['protein_g']
+                                sodium_in_mg = i['sodium_mg']
+                                calories = i['calories']
+                                fat_total_g = i['fat_total_g']
+                                fat_saturated_g = i['fat_saturated_g']
+                                potassium_mg = i['potassium_mg']
+                                cholesterol_mg = i['cholesterol_mg']
+                                carbohydrates_total_g = i['carbohydrates_total_g']
+                    else: 
+                        return make_response({'error': response.text},response.status_code)
+                    
+                    if content['confirm'].lower()=="yes":
+                        mealentry= MealEntry(portiontype,servingSize,date_and_time,mealtype,mealOrDrink,meal,pid)
+                        db.session.add(mealentry)
+                        db.session.commit()
+                            
+                        mealEntry = MealEntry.query.filter_by(meal=meal).first()
+                        nutrients = Nutrients(sugar_in_g, protein_in_g,sodium_in_mg, calories,fat_total_g,fat_saturated_g, potassium_mg, cholesterol_mg, carbohydrates_total_g,mealEntry.meid)
+                        db.session.add(nutrients)
+                        db.session.commit()
+                            
+                        mealDiary = MealDiary(pid)
+                        db.session.add(mealDiary)
+                        db.session.commit()
+            
+                        return make_response({'success': 'The meal entry has been created successfully.'},200)
+                except Exception as e: 
+                    db.session.rollback()
+                    print(e)
+                    return make_response({'error': 'An error has occurred.'},400)
             elif isCreatorReal is None:
                 db.session.rollback()
                 return make_response({'error': 'The user attempting to create the medication reminder does not exist.'},400)
@@ -710,15 +722,15 @@ def createMealEntry(pid):
             return make_response({'error': 'An error has occurred.'},400)
    
 
-@app.route("/editMealEntry/<meid>", methods = ['PUT'])
+@app.route("/editMealEntry/<pid>/<meid>", methods = ['PUT'])
 @login_required
 @patient_or_caregiver_required
-def editMealEntry(meid):    
+def editMealEntry(pid,meid):    
     if request.method =="PUT":
         try:
             content = request.get_json()
             mealEntry = MealEntry.query.filter_by(meid=meid).first()
-            patient = Patients.query.filter_by(pid=mealEntry.pid).first()
+            patient = Patients.query.filter_by(pid=pid).first()
             if patient.name == current_user.name or current_user in patient.caregivers:
                 mealEntry.portiontype = content['portiontype'] if content['portiontype'] != None else mealEntry.portiontype
                 mealEntry.servingSize = content['servingSize'] if content['servingSize'] != None else mealEntry.servingSize
@@ -748,25 +760,31 @@ def editMealEntry(meid):
                 for nutrient in mealEntry.nutrients:
                     api_url = 'https://api.calorieninjas.com/v1/nutrition?query='
                     query = mealEntry.servingSize+ " "+ mealEntry.portiontype + " " + mealEntry.meal 
-                    response = requests.get(api_url + query, headers={'X-Api-Key': 'UdjAYE21RFKdvFnrUhM25g==xL6FYYElHVpuQrAJ'})
-                    if response.status_code == requests.codes.ok:
-                        print(response.text)
-                        nutrients_data = response.json().get('items', [])[0]
-                        nutrient.sugar_in_g = nutrients_data['sugar_g']
-                        nutrient.protein_in_g = nutrients_data['protein_in_g']
-                        nutrient.sodium_in_mg = nutrients_data['sodium_in_mg']
-                        nutrient.calories = nutrients_data['calories']
-                        nutrient.fat_total_g = nutrients_data['fat_total_g']
-                        nutrient.fat_saturated_g = nutrients_data['fat_saturated_g']
-                        nutrient.potassium_mg = nutrients_data['potassium_mg']
-                        nutrient.cholesterol_mg = nutrients_data['cholesterol_mg']
-                        nutrient.carbohydrates_total_g = nutrients_data['carbohydrates_total_g']
-                    else: 
-                        return make_response({'error': response.text},response.status_code)
-                    
+                    try:
+                        response = requests.get(api_url + query, headers={'X-Api-Key': 'UdjAYE21RFKdvFnrUhM25g==xL6FYYElHVpuQrAJ'})
+                        if response.status_code == requests.codes.ok:
+                            nutrients_data = response.json().get('items', [])
+                            if content['confirm'].lower()=="yes":
+                                if nutrients_data: 
+                                    for i in nutrients_data:
+                                        nutrient.sugar_in_g = i['sugar_g']
+                                        nutrient.protein_in_g = i['protein_in_g']
+                                        nutrient.sodium_in_mg = i['sodium_in_mg']
+                                        nutrient.calories = i['calories']
+                                        nutrient.fat_total_g = i['fat_total_g']
+                                        nutrient.fat_saturated_g = i['fat_saturated_g']
+                                        nutrient.potassium_mg = i['potassium_mg']
+                                        nutrient.cholesterol_mg = i['cholesterol_mg']
+                                        nutrient.carbohydrates_total_g = i['carbohydrates_total_g']
+                        else: 
+                            return make_response({'error': response.text},response.status_code)
+                    except Exception as e: 
+                        db.session.rollback()
+                        print(e)
+                        return make_response({'error': 'An error has occurred.'},400)
                 medAudit = MealEntryAudit(meid, current_user.name)
                 db.session.add(medAudit)
-                db.commit()
+                db.session.commit()
                 return make_response({'success': 'Meal Entry has been updated successfully'},200)
             return make_response({'error': 'User is not authorised to edit this meal entry.'},400)    
                         
@@ -775,6 +793,39 @@ def editMealEntry(meid):
             print(e)
             return make_response({'error': 'An error has occurred.'},400)     
  
+
+try:
+                    response = requests.get(api_url + query, headers={'X-Api-Key': 'UdjAYE21RFKdvFnrUhM25g==xL6FYYElHVpuQrAJ'})
+                    if response.status_code == requests.codes.ok:
+                        nutrients_data = response.json().get('items', [])
+                        if nutrients_data: 
+                            for i in nutrients_data:
+                                sugar_in_g = i['sugar_g']
+                                protein_in_g = i['protein_g']
+                                sodium_in_mg = i['sodium_mg']
+                                calories = i['calories']
+                                fat_total_g = i['fat_total_g']
+                                fat_saturated_g = i['fat_saturated_g']
+                                potassium_mg = i['potassium_mg']
+                                cholesterol_mg = i['cholesterol_mg']
+                                carbohydrates_total_g = i['carbohydrates_total_g']
+                    else: 
+                        
+                        mealentry= MealEntry(portiontype,servingSize,date_and_time,mealtype,mealOrDrink,meal,pid)
+                        db.session.add(mealentry)
+                        db.session.commit()
+                            
+                        mealEntry = MealEntry.query.filter_by(meal=meal).first()
+                        nutrients = Nutrients(sugar_in_g, protein_in_g,sodium_in_mg, calories,fat_total_g,fat_saturated_g, potassium_mg, cholesterol_mg, carbohydrates_total_g,mealEntry.meid)
+                        db.session.add(nutrients)
+                        db.session.commit()
+                            
+                        mealDiary = MealDiary(pid)
+                        db.session.add(mealDiary)
+                        db.session.commit()
+            
+                        return make_response({'success': 'The meal entry has been created successfully.'},200)
+                
 
 @app.route("/getAllMealEntries/<pid>", methods = ['GET'])
 @login_required
