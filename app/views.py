@@ -793,40 +793,6 @@ def editMealEntry(pid,meid):
             print(e)
             return make_response({'error': 'An error has occurred.'},400)     
  
-
-try:
-                    response = requests.get(api_url + query, headers={'X-Api-Key': 'UdjAYE21RFKdvFnrUhM25g==xL6FYYElHVpuQrAJ'})
-                    if response.status_code == requests.codes.ok:
-                        nutrients_data = response.json().get('items', [])
-                        if nutrients_data: 
-                            for i in nutrients_data:
-                                sugar_in_g = i['sugar_g']
-                                protein_in_g = i['protein_g']
-                                sodium_in_mg = i['sodium_mg']
-                                calories = i['calories']
-                                fat_total_g = i['fat_total_g']
-                                fat_saturated_g = i['fat_saturated_g']
-                                potassium_mg = i['potassium_mg']
-                                cholesterol_mg = i['cholesterol_mg']
-                                carbohydrates_total_g = i['carbohydrates_total_g']
-                    else: 
-                        
-                        mealentry= MealEntry(portiontype,servingSize,date_and_time,mealtype,mealOrDrink,meal,pid)
-                        db.session.add(mealentry)
-                        db.session.commit()
-                            
-                        mealEntry = MealEntry.query.filter_by(meal=meal).first()
-                        nutrients = Nutrients(sugar_in_g, protein_in_g,sodium_in_mg, calories,fat_total_g,fat_saturated_g, potassium_mg, cholesterol_mg, carbohydrates_total_g,mealEntry.meid)
-                        db.session.add(nutrients)
-                        db.session.commit()
-                            
-                        mealDiary = MealDiary(pid)
-                        db.session.add(mealDiary)
-                        db.session.commit()
-            
-                        return make_response({'success': 'The meal entry has been created successfully.'},200)
-                
-
 @app.route("/getAllMealEntries/<pid>", methods = ['GET'])
 @login_required
 @patient_or_caregiver_required
