@@ -69,10 +69,10 @@ class Patients(db.Model):
     name = db.Column(db.String(200), unique=False, nullable=False)
     age = db.Column(db.Integer)
     dob = db.Column(db.DateTime)
-    email = db.Column(db.String(256))
+    email = db.Column(db.String(256), unique = True)
     username = db.Column(db.String(200), unique=True)
     password = db.Column(db.String(256), nullable=False)
-    phonenumber = db.Column(db.String(15))
+    phonenumber = db.Column(db.String(15), unique = True)
     gender = db.Column(db.Enum(Gender), nullable=False)
     consentForData = db.Column(db.String(20))
     joined_on = db.Column(db.DateTime, default=datetime.now())
@@ -172,9 +172,9 @@ class Caregivers(db.Model):
     type = db.Column(db.Enum(CaregiverType))
     age = db.Column(db.Integer)
     dob = db.Column(db.DateTime)
-    email = db.Column(db.String(256))
+    email = db.Column(db.String(256), unique = True)
     password = db.Column(db.String(200))
-    phonenumber = db.Column(db.String(15))
+    phonenumber = db.Column(db.String(15), unique = True)
     gender = db.Column(db.Enum(Gender))
     consentForData = db.Column(db.String(20))
     joined_on = db.Column(db.DateTime, default=datetime.now())
@@ -343,7 +343,7 @@ class Medication(db.Model):
     pid = db.Column(db.Integer, db.ForeignKey('patients.pid'))
     creator = db.Column(db.String(256))
     created_at = db.Column(db.DateTime, default=datetime.now)
-    lastupdated_by = db.Column(db.String(256), nullable = True)
+    last_updated_by = db.Column(db.String(256), nullable = True)
     reminderTimes = db.relationship('MedicationTime', backref='medication', lazy =True)
     alerts = db.relationship('Alert', backref='medication', lazy =True)
     audits = db.relationship('MedicationAudit', backref='medication', lazy=True)
@@ -430,7 +430,7 @@ class MealEntry(db.Model):
         # self.nutrients_id = nutrients_id
         
 class MealEntryAudit(db.Model):
-    __tablename__ = "medicationaudit"
+    __tablename__ = "mealentryaudit"
     me_auid= db.Column(db.Integer, primary_key=True, autoincrement=True)
     meid = db.Column(db.Integer, db.ForeignKey('mealentry.meid'))
     updated_at = db.Column(db.DateTime, default=datetime.now)
@@ -462,7 +462,7 @@ class Nutrients(db.Model):
     potassium_mg = db.Column(db.Float)
     cholesterol_mg = db.Column(db.Float)
     carbohydrates_total_g = db.Column(db.Float)
-    meid = db.Column(db.Integer, db.ForeignKey('mealentry.nid'))
+    meid = db.Column(db.Integer, db.ForeignKey('mealentry.meid'))
     
     
     def __init__(self, sugar_in_g, protein_in_g, sodium_in_mg, calories, fat_total_g, fat_saturated_g, potassium_mg, cholesterol_mg, carbohydrates_total_g, meid):
@@ -483,7 +483,7 @@ class Symptom(db.Model):
     severity = db.Column(db.Integer)
     date_and_time = db.Column(db.DateTime)
     symptom_name = db.Column(db.String(250))
-    symptomType = db.Column(db.Enuum(SymptomType))
+    symptomType = db.Column(db.Enum(SymptomType))
     patient_id = db.Column(db.Integer, db.ForeignKey('patients.pid'))
     hrid = db.Column(db.Integer, db.ForeignKey('healthrecord.hrid'))
     
