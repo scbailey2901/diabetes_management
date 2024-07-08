@@ -444,7 +444,7 @@ class MealDiary(db.Model):
     __tablename__ = "mealdiary"
     mdid = db.Column(db.Integer, primary_key=True, autoincrement=True)
     pid = db.Column(db.Integer, db.ForeignKey('patients.pid'))
-    allMeals = db.relationship("MealEntry", backref="mealdiary", order_by=MealEntry.date_and_time, lazy=True)
+    allMeals = db.relationship("MealEntry", backref="mealdiary", lazy=True)
     
     def __init__(self, pid):
         self.pid = pid
@@ -462,7 +462,7 @@ class Nutrients(db.Model):
     potassium_mg = db.Column(db.Float)
     cholesterol_mg = db.Column(db.Float)
     carbohydrates_total_g = db.Column(db.Float)
-    meid = db.Column(db.Integer, db.ForeignKey('mealentry.meid'))
+    meid = db.Column(db.Integer, db.ForeignKey('mealentry.meid'), unique=True)
     
     
     def __init__(self, sugar_in_g, protein_in_g, sodium_in_mg, calories, fat_total_g, fat_saturated_g, potassium_mg, cholesterol_mg, carbohydrates_total_g, meid):

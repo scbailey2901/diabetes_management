@@ -1,8 +1,8 @@
 """updates
 
-Revision ID: c9ee9b7cb1cf
+Revision ID: 2487beaf044a
 Revises: 
-Create Date: 2024-06-25 18:21:27.245800
+Create Date: 2024-07-03 12:41:04.393511
 
 """
 from alembic import op
@@ -10,7 +10,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision = 'c9ee9b7cb1cf'
+revision = '2487beaf044a'
 down_revision = None
 branch_labels = None
 depends_on = None
@@ -97,7 +97,7 @@ def upgrade():
     sa.Column('pid', sa.Integer(), nullable=True),
     sa.Column('creator', sa.String(length=256), nullable=True),
     sa.Column('created_at', sa.DateTime(), nullable=True),
-    sa.Column('lastupdated_by', sa.String(length=256), nullable=True),
+    sa.Column('last_updated_by', sa.String(length=256), nullable=True),
     sa.ForeignKeyConstraint(['pid'], ['patients.pid'], ),
     sa.PrimaryKeyConstraint('mid')
     )
@@ -208,7 +208,8 @@ def upgrade():
     sa.Column('carbohydrates_total_g', sa.Float(), nullable=True),
     sa.Column('meid', sa.Integer(), nullable=True),
     sa.ForeignKeyConstraint(['meid'], ['mealentry.meid'], ),
-    sa.PrimaryKeyConstraint('nid')
+    sa.PrimaryKeyConstraint('nid'),
+    sa.UniqueConstraint('meid')
     )
     # ### end Alembic commands ###
 

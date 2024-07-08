@@ -5,6 +5,8 @@ from flask import render_template,make_response, redirect, request, url_for, fla
 # from apscheduler.schedulers.background import BackgroundScheduler 
 from flask_apscheduler import APScheduler 
 from apscheduler.schedulers.background import BackgroundScheduler
+# import pandas as pd
+# import matplotlib.pyplot as mlt
 from flask import current_app
 # from flask_socketio import SocketIO
 # from flask_socketio import emit
@@ -443,16 +445,18 @@ def createMedicationReminder(pid):
                         medication = Medication(name, unit, recommendedFrequency,recTime,amount,inventory, pid, creator, creator)
                         db.session.add(medication)
                         db.session.commit() 
+                        medication2=Medication.query.filter_by(name=name).first()
+                        print(medication2)
                         for i in range(1, recommendedFrequency+1):
                             timekey = 'time' + str(i)
                             time = datetime.strptime(content[(timekey)], '%I:%M %p').time() if content[(timekey)] != None else "Time value missing"
                             if time != "Time value missing":
-                                medTime = MedicationTime(time,medication.mid)
+                                medTime = MedicationTime(time,medication2.mid)
                                 db.session.add(medTime)
                                 db.session.commit()
                                 if content['confirm'].lower() == "yes":
-                                    medication=Medication.query.filter_by(name=name).first()
-                                    alrt=Alert("Hi "+patient.username+"! It's "+ content[(timekey)]+ ". Time to take your "+ medication.name + " medication.", AlertType.MEDICATION, time, pid, medication.mid)
+                                    print(medication2)
+                                    alrt=Alert("Hi "+patient.username+"! It's "+ content[(timekey)]+ ". Time to take your "+ medication2.name + " medication.", AlertType.MEDICATION, time, pid, medication2.mid)
                                     db.session.add(alrt)
                                     db.session.commit()
                                 else:
@@ -610,8 +614,8 @@ def deleteMedicationReminder(pid,mid):
             patient = Patients.query.filter_by(pid=pid).first()
             if patient.name == current_user.name or current_user in patient.caregivers:
                 if medication != None:
-                    alerts= Alert.query.filter_by(mid=mid)
-                    times = MedicationTime.query.filter_by(mid=mid)
+                    alerts= Alert.query.filter_by(mid=mid).all()
+                    times = MedicationTime.query.filter_by(mid=mid).all()
                     db.session.delete(medication)
                     for alert in alerts:
                         db.session.delete(alert)
@@ -620,10 +624,10 @@ def deleteMedicationReminder(pid,mid):
                     for time in times:
                         db.session.delete(time)
                     db.session.commit()
-                    if Medication.query.filter_by(mid=mid).first() == None and Alert.query.filter_by(mid=mid) == 'None':
-                        return make_response({'success': 'The medication reminder has been deleted successfully.'},400)
+                    if Medication.query.filter_by(mid=mid).first() == None and Alert.query.filter_by(mid=mid).all() == []:
+                        return make_response({'success': 'The medication reminder has been deleted successfully.'},200)
                     else:
-                        return make_response({'error': 'An error occurred  during the attempt to delete this medication reminder.'},400)
+                        return make_response({'error': 'An error occurred during the attempt to delete this medication reminder.'},400)
                 else:
                     return make_response({'error': 'Medication Reminder does not exist.'},400)
             else:
@@ -700,11 +704,13 @@ def createMealEntry(pid):
                         nutrients = Nutrients(sugar_in_g, protein_in_g,sodium_in_mg, calories,fat_total_g,fat_saturated_g, potassium_mg, cholesterol_mg, carbohydrates_total_g,mealEntry.meid)
                         db.session.add(nutrients)
                         db.session.commit()
-                            
+                        
                         mealDiary = MealDiary(pid)
                         db.session.add(mealDiary)
                         db.session.commit()
-            
+
+                        mealdiary = MealDiary.query.filter_by(pid=pid).first()
+                        mealdiary.allMeals.append(mealEntry)
                         return make_response({'success': 'The meal entry has been created successfully.'},200)
                 except Exception as e: 
                     db.session.rollback()
@@ -759,7 +765,7 @@ def editMealEntry(pid,meid):
 
                 for nutrient in mealEntry.nutrients:
                     api_url = 'https://api.calorieninjas.com/v1/nutrition?query='
-                    query = mealEntry.servingSize+ " "+ mealEntry.portiontype + " " + mealEntry.meal 
+                    query = str(mealEntry.servingSize)+ " "+ mealEntry.portiontype + " " + mealEntry.meal 
                     try:
                         response = requests.get(api_url + query, headers={'X-Api-Key': 'UdjAYE21RFKdvFnrUhM25g==xL6FYYElHVpuQrAJ'})
                         if response.status_code == requests.codes.ok:
@@ -768,8 +774,8 @@ def editMealEntry(pid,meid):
                                 if nutrients_data: 
                                     for i in nutrients_data:
                                         nutrient.sugar_in_g = i['sugar_g']
-                                        nutrient.protein_in_g = i['protein_in_g']
-                                        nutrient.sodium_in_mg = i['sodium_in_mg']
+                                        nutrient.protein_in_g = i['protein_g']
+                                        nutrient.sodium_in_mg = i['sodium_mg']
                                         nutrient.calories = i['calories']
                                         nutrient.fat_total_g = i['fat_total_g']
                                         nutrient.fat_saturated_g = i['fat_saturated_g']
@@ -802,12 +808,14 @@ def getMealEntries(pid):
             if request.method =="GET":
                 patient= Patients.query.filter_by(pid=pid).first()
                 mealDiary = MealDiary.query.filter_by(pid=pid).first()
+                print(mealDiary.allMeals)
                 if patient != None and mealDiary != None:
-                    if mealDiary.allmeals != None:
+                    if mealDiary.allMeals != None:
                         meallist=[]
-                        for meal in mealDiary.allmeals:
-                            nutrients = Nutrients.query.filter_by(nid=meal.nutrients_id)
-                            mealent = {"portiontype": meal.portiontype, "servingSize": meal.servingSize, "date_and_time":meal.date_and_time, "mealtype": meal.mealtype, "mealOrDrink": meal.mealOrDrink, "meal": meal.meal, "patient_id": meal.pid,"nutrients_id":meal.nutrients_id,"sugar_in_g":nutrients.sugar_in_g,"protein_in_g": nutrients.protein_in_g, "sodium_in_mg": nutrients.sodium_in_mg, "calories":nutrients.calories, "fat_total_g": nutrients.fat_total_g, "fat_saturated_g": nutrients.fat_saturated_g, "potassium_mg": nutrients.potassium_mg, "cholesterol_mg": nutrients.cholesterol_mg,"carbohydrates_total_g": nutrients.carbohydrates_total_g}
+                        for meal in mealDiary.allMeals:
+                            nutrients = Nutrients.query.filter_by(meid=meal.meid).all()
+                            for i in nutrients:
+                                mealent = {"portiontype": meal.portiontype, "servingSize": meal.servingSize, "date_and_time":meal.date_and_time, "mealtype": meal.mealtype, "mealOrDrink": meal.mealOrDrink, "meal": meal.meal, "patient_id": meal.pid,"nutrients_id":i.nid,"sugar_in_g":i.sugar_in_g,"protein_in_g": i.protein_in_g, "sodium_in_mg": i.sodium_in_mg, "calories":i.calories, "fat_total_g": i.fat_total_g, "fat_saturated_g": i.fat_saturated_g, "potassium_mg": i.potassium_mg, "cholesterol_mg": i.cholesterol_mg,"carbohydrates_total_g": i.carbohydrates_total_g}
                             meallist.append(mealent)
                         return make_response({'mealentries': meallist}, 200)
                 elif patient == None:
@@ -829,13 +837,13 @@ def getWeeklyMealEntries(pid):
                 patient= Patients.query.filter_by(pid=pid).first()
                 mealDiary = MealDiary.query.filter_by(pid=pid).first()
                 if patient != None and mealDiary != None:
-                    if mealDiary.allmeals != None:
+                    if mealDiary.allMeals != None:
                         meallist=[]
                         start = date.today() - timedelta(days=today.weekday())
                         end = start + timedelta(days=6)
-                        for meal in mealDiary.allmeals:
+                        for meal in mealDiary.allMeals:
                             if (start <= meal.date_and_time.date()) and (meal.date_and_time.date() <= end):
-                                nutrients = Nutrients.query.filter_by(nid=meal.nutrients_id)
+                                nutrients = Nutrients.query.filter_by(nid=meal.nutrients_id).first()
                                 mealent = {"portiontype": meal.portiontype, "servingSize": meal.servingSize, "date_and_time":meal.date_and_time, "mealtype": meal.mealtype, "mealOrDrink": meal.mealOrDrink, "meal": meal.meal, "patient_id": meal.pid,"nutrients_id":meal.nutrients_id,"sugar_in_g":nutrients.sugar_in_g,"protein_in_g": nutrients.protein_in_g, "sodium_in_mg": nutrients.sodium_in_mg, "calories":nutrients.calories, "fat_total_g": nutrients.fat_total_g, "fat_saturated_g": nutrients.fat_saturated_g, "potassium_mg": nutrients.potassium_mg, "cholesterol_mg": nutrients.cholesterol_mg,"carbohydrates_total_g": nutrients.carbohydrates_total_g}
                                 meallist.append(mealent)
                         return make_response({'mealentries': meallist}, 200)
@@ -858,11 +866,11 @@ def getDailyMealEntries(pid):
                 patient= Patients.query.filter_by(pid=pid).first()
                 mealDiary = MealDiary.query.filter_by(pid=pid).first()
                 if patient != None and mealDiary != None:
-                    if mealDiary.allmeals != None:
+                    if mealDiary.allMeals != None:
                         meallist=[]
-                        for meal in mealDiary.allmeals:
+                        for meal in mealDiary.allMeals:
                             if meal.date_and_time.date() == date.today():
-                                nutrients = Nutrients.query.filter_by(nid=meal.nutrients_id)
+                                nutrients = Nutrients.query.filter_by(nid=meal.nutrients_id).first()
                                 mealent = {"portiontype": meal.portiontype, "servingSize": meal.servingSize, "date_and_time":meal.date_and_time, "mealtype": meal.mealtype, "mealOrDrink": meal.mealOrDrink, "meal": meal.meal, "patient_id": meal.pid,"nutrients_id":meal.nutrients_id,"sugar_in_g":nutrients.sugar_in_g,"protein_in_g": nutrients.protein_in_g, "sodium_in_mg": nutrients.sodium_in_mg, "calories":nutrients.calories, "fat_total_g": nutrients.fat_total_g, "fat_saturated_g": nutrients.fat_saturated_g, "potassium_mg": nutrients.potassium_mg, "cholesterol_mg": nutrients.cholesterol_mg,"carbohydrates_total_g": nutrients.carbohydrates_total_g}
                                 meallist.append(mealent)
                         return make_response({'mealentries': meallist}, 200)
@@ -885,7 +893,7 @@ def getMonthlyMealEntries(pid):
                 patient= Patients.query.filter_by(pid=pid).first()
                 mealDiary = MealDiary.query.filter_by(pid=pid).first()
                 if patient != None and mealDiary != None:
-                    if mealDiary.allmeals != None:
+                    if mealDiary.allMeals != None:
                         meallist=[]
                         today = date.today()
                         start_month = today.replace(days=1)
@@ -894,9 +902,9 @@ def getMonthlyMealEntries(pid):
                         else:
                             end_onth = today.replace(month=today.month+1, day= 1) - timedelta(days = 1)
                             
-                        for meal in mealDiary.allmeals:
+                        for meal in mealDiary.allMeals:
                             if start_month <= meal.date_and_time.date() and meal.date_and_time.date() <= end_month:
-                                nutrients = Nutrients.query.filter_by(nid=meal.nutrients_id)
+                                nutrients = Nutrients.query.filter_by(nid=meal.nutrients_id).first()
                                 mealent = {"portiontype": meal.portiontype, "servingSize": meal.servingSize, "date_and_time":meal.date_and_time, "mealtype": meal.mealtype, "mealOrDrink": meal.mealOrDrink, "meal": meal.meal, "patient_id": meal.pid,"nutrients_id":meal.nutrients_id,"sugar_in_g":nutrients.sugar_in_g,"protein_in_g": nutrients.protein_in_g, "sodium_in_mg": nutrients.sodium_in_mg, "calories":nutrients.calories, "fat_total_g": nutrients.fat_total_g, "fat_saturated_g": nutrients.fat_saturated_g, "potassium_mg": nutrients.potassium_mg, "cholesterol_mg": nutrients.cholesterol_mg,"carbohydrates_total_g": nutrients.carbohydrates_total_g}
                                 meallist.append(mealent)
                         return make_response({'mealentries': meallist}, 200)
@@ -922,14 +930,18 @@ def getDailyBreakfastEntries(pid):
                 mealDiary = MealDiary.query.filter_by(pid=pid).first()
                 if patient != None and mealDiary != None:
                     # allbreakfasts = 
-                    if mealDiary.allmeals != None:
+                    if mealDiary.allMeals != None:
                         meallist=[]
-                        for meal in mealDiary.allmeals:    
+                        for meal in mealDiary.allMeals:    
+                            print(mealDiary)
                             if (meal.mealtype == MealType.BREAKFAST) and (meal.date_and_time.date() == date.today()):                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       
-                                nutrients = Nutrients.query.filter_by(nid=meal.nutrients_id)
+                                nutrients = Nutrients.query.filter_by(nid=meal.nutrients_id).first()
+                                print(nutrients)
                                 mealent = {"portiontype": meal.portiontype, "servingSize": meal.servingSize, "date_and_time":meal.date_and_time, "mealtype": meal.mealtype, "mealOrDrink": meal.mealOrDrink, "meal": meal.meal, "patient_id": meal.pid,"nutrients_id":meal.nutrients_id,"sugar_in_g":nutrients.sugar_in_g,"protein_in_g": nutrients.protein_in_g, "sodium_in_mg": nutrients.sodium_in_mg, "calories":nutrients.calories, "fat_total_g": nutrients.fat_total_g, "fat_saturated_g": nutrients.fat_saturated_g, "potassium_mg": nutrients.potassium_mg, "cholesterol_mg": nutrients.cholesterol_mg,"carbohydrates_total_g": nutrients.carbohydrates_total_g}
                                 meallist.append(mealent)
                         return make_response({'mealentries': meallist}, 200)
+                    else:
+                        return make_response({'error': "Meal Diary is empty."}, 400)
                 elif patient == None:
                     db.session.rollback()
                     return make_response({'error': 'Patient does not exist'},400)
@@ -952,11 +964,11 @@ def getDailyLunchEntries(pid):
                 mealDiary = MealDiary.query.filter_by(pid=pid).first()
                 if patient != None and mealDiary != None:
                     # allbreakfasts = 
-                    if mealDiary.allmeals != None:
+                    if mealDiary.allMeals != None:
                         meallist=[]
-                        for meal in mealDiary.allmeals:    
+                        for meal in mealDiary.allMeals:    
                             if (meal.mealtype == MealType.LUNCH) and (meal.date_and_time.date() == date.today()):                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       
-                                nutrients = Nutrients.query.filter_by(nid=meal.nutrients_id)
+                                nutrients = Nutrients.query.filter_by(nid=meal.nutrients_id).first()
                                 mealent = {"portiontype": meal.portiontype, "servingSize": meal.servingSize, "date_and_time":meal.date_and_time, "mealtype": meal.mealtype, "mealOrDrink": meal.mealOrDrink, "meal": meal.meal, "patient_id": meal.pid,"nutrients_id":meal.nutrients_id,"sugar_in_g":nutrients.sugar_in_g,"protein_in_g": nutrients.protein_in_g, "sodium_in_mg": nutrients.sodium_in_mg, "calories":nutrients.calories, "fat_total_g": nutrients.fat_total_g, "fat_saturated_g": nutrients.fat_saturated_g, "potassium_mg": nutrients.potassium_mg, "cholesterol_mg": nutrients.cholesterol_mg,"carbohydrates_total_g": nutrients.carbohydrates_total_g}
                                 meallist.append(mealent)
                         return make_response({'mealentries': meallist}, 200)
@@ -982,11 +994,11 @@ def getDailySnackEntries(pid):
                 mealDiary = MealDiary.query.filter_by(pid=pid).first()
                 if patient != None and mealDiary != None:
                     # allbreakfasts = 
-                    if mealDiary.allmeals != None:
+                    if mealDiary.allMeals != None:
                         meallist=[]
-                        for meal in mealDiary.allmeals:    
+                        for meal in mealDiary.allMeals:    
                             if (meal.mealtype == MealType.SNACK) and (meal.date_and_time.date() == date.today()):                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       
-                                nutrients = Nutrients.query.filter_by(nid=meal.nutrients_id)
+                                nutrients = Nutrients.query.filter_by(nid=meal.nutrients_id).first()
                                 mealent = {"portiontype": meal.portiontype, "servingSize": meal.servingSize, "date_and_time":meal.date_and_time, "mealtype": meal.mealtype, "mealOrDrink": meal.mealOrDrink, "meal": meal.meal, "patient_id": meal.pid,"nutrients_id":meal.nutrients_id,"sugar_in_g":nutrients.sugar_in_g,"protein_in_g": nutrients.protein_in_g, "sodium_in_mg": nutrients.sodium_in_mg, "calories":nutrients.calories, "fat_total_g": nutrients.fat_total_g, "fat_saturated_g": nutrients.fat_saturated_g, "potassium_mg": nutrients.potassium_mg, "cholesterol_mg": nutrients.cholesterol_mg,"carbohydrates_total_g": nutrients.carbohydrates_total_g}
                                 meallist.append(mealent)
                         return make_response({'mealentries': meallist}, 200)
@@ -1012,11 +1024,11 @@ def getDailyBrunchEntries(pid):
                 mealDiary = MealDiary.query.filter_by(pid=pid).first()
                 if patient != None and mealDiary != None:
                     # allbreakfasts = 
-                    if mealDiary.allmeals != None:
+                    if mealDiary.allMeals != None:
                         meallist=[]
-                        for meal in mealDiary.allmeals:    
+                        for meal in mealDiary.allMeals:    
                             if (meal.mealtype == MealType.BRUNCH) and (meal.date_and_time.date() == date.today()):                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       
-                                nutrients = Nutrients.query.filter_by(nid=meal.nutrients_id)
+                                nutrients = Nutrients.query.filter_by(nid=meal.nutrients_id).first()
                                 mealent = {"portiontype": meal.portiontype, "servingSize": meal.servingSize, "date_and_time":meal.date_and_time, "mealtype": meal.mealtype, "mealOrDrink": meal.mealOrDrink, "meal": meal.meal, "patient_id": meal.pid,"nutrients_id":meal.nutrients_id,"sugar_in_g":nutrients.sugar_in_g,"protein_in_g": nutrients.protein_in_g, "sodium_in_mg": nutrients.sodium_in_mg, "calories":nutrients.calories, "fat_total_g": nutrients.fat_total_g, "fat_saturated_g": nutrients.fat_saturated_g, "potassium_mg": nutrients.potassium_mg, "cholesterol_mg": nutrients.cholesterol_mg,"carbohydrates_total_g": nutrients.carbohydrates_total_g}
                                 meallist.append(mealent)
                         return make_response({'mealentries': meallist}, 200)
@@ -1042,11 +1054,11 @@ def getDailyDessertEntries(pid):
                 mealDiary = MealDiary.query.filter_by(pid=pid).first()
                 if patient != None and mealDiary != None:
                     # allbreakfasts = 
-                    if mealDiary.allmeals != None:
+                    if mealDiary.allMeals != None:
                         meallist=[]
-                        for meal in mealDiary.allmeals:    
+                        for meal in mealDiary.allMeals:    
                             if (meal.mealtype == MealType.DESSERT) and (meal.date_and_time.date() == date.today()):                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       
-                                nutrients = Nutrients.query.filter_by(nid=meal.nutrients_id)
+                                nutrients = Nutrients.query.filter_by(nid=meal.nutrients_id).first()
                                 mealent = {"portiontype": meal.portiontype, "servingSize": meal.servingSize, "date_and_time":meal.date_and_time, "mealtype": meal.mealtype, "mealOrDrink": meal.mealOrDrink, "meal": meal.meal, "patient_id": meal.pid,"nutrients_id":meal.nutrients_id,"sugar_in_g":nutrients.sugar_in_g,"protein_in_g": nutrients.protein_in_g, "sodium_in_mg": nutrients.sodium_in_mg, "calories":nutrients.calories, "fat_total_g": nutrients.fat_total_g, "fat_saturated_g": nutrients.fat_saturated_g, "potassium_mg": nutrients.potassium_mg, "cholesterol_mg": nutrients.cholesterol_mg,"carbohydrates_total_g": nutrients.carbohydrates_total_g}
                                 meallist.append(mealent)
                         return make_response({'mealentries': meallist}, 200)
@@ -1072,11 +1084,11 @@ def getDailyBeverageEntries(pid):
                 mealDiary = MealDiary.query.filter_by(pid=pid).first()
                 if patient != None and mealDiary != None:
                     # allbreakfasts = 
-                    if mealDiary.allmeals != None:
+                    if mealDiary.allMeals != None:
                         meallist=[]
-                        for meal in mealDiary.allmeals:    
+                        for meal in mealDiary.allMeals:    
                             if (meal.mealtype == MealType.BEVERAGE) and (meal.date_and_time.date() == date.today()):                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       
-                                nutrients = Nutrients.query.filter_by(nid=meal.nutrients_id)
+                                nutrients = Nutrients.query.filter_by(nid=meal.nutrients_id).first()
                                 mealent = {"portiontype": meal.portiontype, "servingSize": meal.servingSize, "date_and_time":meal.date_and_time, "mealtype": meal.mealtype, "mealOrDrink": meal.mealOrDrink, "meal": meal.meal, "patient_id": meal.pid,"nutrients_id":meal.nutrients_id,"sugar_in_g":nutrients.sugar_in_g,"protein_in_g": nutrients.protein_in_g, "sodium_in_mg": nutrients.sodium_in_mg, "calories":nutrients.calories, "fat_total_g": nutrients.fat_total_g, "fat_saturated_g": nutrients.fat_saturated_g, "potassium_mg": nutrients.potassium_mg, "cholesterol_mg": nutrients.cholesterol_mg,"carbohydrates_total_g": nutrients.carbohydrates_total_g}
                                 meallist.append(mealent)
                         return make_response({'mealentries': meallist}, 200)
@@ -1102,11 +1114,11 @@ def getBeverageEntries(pid):
                 mealDiary = MealDiary.query.filter_by(pid=pid).first()
                 if patient != None and mealDiary != None:
                     # allbreakfasts = 
-                    if mealDiary.allmeals != None:
+                    if mealDiary.allMeals != None:
                         meallist=[]
-                        for meal in mealDiary.allmeals:    
+                        for meal in mealDiary.allMeals:    
                             if meal.mealtype == MealType.BEVERAGE:                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            
-                                nutrients = Nutrients.query.filter_by(nid=meal.nutrients_id)
+                                nutrients = Nutrients.query.filter_by(nid=meal.nutrients_id).first()
                                 mealent = {"portiontype": meal.portiontype, "servingSize": meal.servingSize, "date_and_time":meal.date_and_time, "mealtype": meal.mealtype, "mealOrDrink": meal.mealOrDrink, "meal": meal.meal, "patient_id": meal.pid,"nutrients_id":meal.nutrients_id,"sugar_in_g":nutrients.sugar_in_g,"protein_in_g": nutrients.protein_in_g, "sodium_in_mg": nutrients.sodium_in_mg, "calories":nutrients.calories, "fat_total_g": nutrients.fat_total_g, "fat_saturated_g": nutrients.fat_saturated_g, "potassium_mg": nutrients.potassium_mg, "cholesterol_mg": nutrients.cholesterol_mg,"carbohydrates_total_g": nutrients.carbohydrates_total_g}
                                 meallist.append(mealent)
                         return make_response({'mealentries': meallist}, 200)
@@ -1132,11 +1144,11 @@ def getLunchEntries(pid):
                 mealDiary = MealDiary.query.filter_by(pid=pid).first()
                 if patient != None and mealDiary != None:
                     # allbreakfasts = 
-                    if mealDiary.allmeals != None:
+                    if mealDiary.allMeals != None:
                         meallist=[]
-                        for meal in mealDiary.allmeals:    
+                        for meal in mealDiary.allMeals:    
                             if meal.mealtype == MealType.LUNCH:                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            
-                                nutrients = Nutrients.query.filter_by(nid=meal.nutrients_id)
+                                nutrients = Nutrients.query.filter_by(nid=meal.nutrients_id).first()
                                 mealent = {"portiontype": meal.portiontype, "servingSize": meal.servingSize, "date_and_time":meal.date_and_time, "mealtype": meal.mealtype, "mealOrDrink": meal.mealOrDrink, "meal": meal.meal, "patient_id": meal.pid,"nutrients_id":meal.nutrients_id,"sugar_in_g":nutrients.sugar_in_g,"protein_in_g": nutrients.protein_in_g, "sodium_in_mg": nutrients.sodium_in_mg, "calories":nutrients.calories, "fat_total_g": nutrients.fat_total_g, "fat_saturated_g": nutrients.fat_saturated_g, "potassium_mg": nutrients.potassium_mg, "cholesterol_mg": nutrients.cholesterol_mg,"carbohydrates_total_g": nutrients.carbohydrates_total_g}
                                 meallist.append(mealent)
                         return make_response({'mealentries': meallist}, 200)
@@ -1162,11 +1174,11 @@ def getDinnerEntries(pid):
                 mealDiary = MealDiary.query.filter_by(pid=pid).first()
                 if patient != None and mealDiary != None:
                     # allbreakfasts = 
-                    if mealDiary.allmeals != None:
+                    if mealDiary.allMeals != None:
                         meallist=[]
-                        for meal in mealDiary.allmeals:    
+                        for meal in mealDiary.allMeals:    
                             if meal.mealtype == MealType.DINNER:                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            
-                                nutrients = Nutrients.query.filter_by(nid=meal.nutrients_id)
+                                nutrients = Nutrients.query.filter_by(nid=meal.nutrients_id).first()
                                 mealent = {"portiontype": meal.portiontype, "servingSize": meal.servingSize, "date_and_time":meal.date_and_time, "mealtype": meal.mealtype, "mealOrDrink": meal.mealOrDrink, "meal": meal.meal, "patient_id": meal.pid,"nutrients_id":meal.nutrients_id,"sugar_in_g":nutrients.sugar_in_g,"protein_in_g": nutrients.protein_in_g, "sodium_in_mg": nutrients.sodium_in_mg, "calories":nutrients.calories, "fat_total_g": nutrients.fat_total_g, "fat_saturated_g": nutrients.fat_saturated_g, "potassium_mg": nutrients.potassium_mg, "cholesterol_mg": nutrients.cholesterol_mg,"carbohydrates_total_g": nutrients.carbohydrates_total_g}
                                 meallist.append(mealent)
                         return make_response({'mealentries': meallist}, 200)
@@ -1192,11 +1204,11 @@ def getBrunchEntries(pid):
                 mealDiary = MealDiary.query.filter_by(pid=pid).first()
                 if patient != None and mealDiary != None:
                     # allbreakfasts = 
-                    if mealDiary.allmeals != None:
+                    if mealDiary.allMeals != None:
                         meallist=[]
-                        for meal in mealDiary.allmeals:    
+                        for meal in mealDiary.allMeals:    
                             if meal.mealtype == MealType.BRUNCH:                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            
-                                nutrients = Nutrients.query.filter_by(nid=meal.nutrients_id)
+                                nutrients = Nutrients.query.filter_by(nid=meal.nutrients_id).first()
                                 mealent = {"portiontype": meal.portiontype, "servingSize": meal.servingSize, "date_and_time":meal.date_and_time, "mealtype": meal.mealtype, "mealOrDrink": meal.mealOrDrink, "meal": meal.meal, "patient_id": meal.pid,"nutrients_id":meal.nutrients_id,"sugar_in_g":nutrients.sugar_in_g,"protein_in_g": nutrients.protein_in_g, "sodium_in_mg": nutrients.sodium_in_mg, "calories":nutrients.calories, "fat_total_g": nutrients.fat_total_g, "fat_saturated_g": nutrients.fat_saturated_g, "potassium_mg": nutrients.potassium_mg, "cholesterol_mg": nutrients.cholesterol_mg,"carbohydrates_total_g": nutrients.carbohydrates_total_g}
                                 meallist.append(mealent)
                         return make_response({'mealentries': meallist}, 200)
@@ -1222,11 +1234,11 @@ def getSnackEntries(pid):
                 mealDiary = MealDiary.query.filter_by(pid=pid).first()
                 if patient != None and mealDiary != None:
                     # allbreakfasts = 
-                    if mealDiary.allmeals != None:
+                    if mealDiary.allMeals != None:
                         meallist=[]
-                        for meal in mealDiary.allmeals:    
+                        for meal in mealDiary.allMeals:    
                             if meal.mealtype == MealType.SNACK:                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            
-                                nutrients = Nutrients.query.filter_by(nid=meal.nutrients_id)
+                                nutrients = Nutrients.query.filter_by(nid=meal.nutrients_id).first()
                                 mealent = {"portiontype": meal.portiontype, "servingSize": meal.servingSize, "date_and_time":meal.date_and_time, "mealtype": meal.mealtype, "mealOrDrink": meal.mealOrDrink, "meal": meal.meal, "patient_id": meal.pid,"nutrients_id":meal.nutrients_id,"sugar_in_g":nutrients.sugar_in_g,"protein_in_g": nutrients.protein_in_g, "sodium_in_mg": nutrients.sodium_in_mg, "calories":nutrients.calories, "fat_total_g": nutrients.fat_total_g, "fat_saturated_g": nutrients.fat_saturated_g, "potassium_mg": nutrients.potassium_mg, "cholesterol_mg": nutrients.cholesterol_mg,"carbohydrates_total_g": nutrients.carbohydrates_total_g}
                                 meallist.append(mealent)
                         return make_response({'mealentries': meallist}, 200)
@@ -1252,11 +1264,11 @@ def getDessertEntries(pid):
                 mealDiary = MealDiary.query.filter_by(pid=pid).first()
                 if patient != None and mealDiary != None:
                     # allbreakfasts = 
-                    if mealDiary.allmeals != None:
+                    if mealDiary.allMeals != None:
                         meallist=[]
-                        for meal in mealDiary.allmeals:    
+                        for meal in mealDiary.allMeals:    
                             if meal.mealtype == MealType.DESSERT:                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            
-                                nutrients = Nutrients.query.filter_by(nid=meal.nutrients_id)
+                                nutrients = Nutrients.query.filter_by(nid=meal.nutrients_id).first()
                                 mealent = {"portiontype": meal.portiontype, "servingSize": meal.servingSize, "date_and_time":meal.date_and_time, "mealtype": meal.mealtype, "mealOrDrink": meal.mealOrDrink, "meal": meal.meal, "patient_id": meal.pid,"nutrients_id":meal.nutrients_id,"sugar_in_g":nutrients.sugar_in_g,"protein_in_g": nutrients.protein_in_g, "sodium_in_mg": nutrients.sodium_in_mg, "calories":nutrients.calories, "fat_total_g": nutrients.fat_total_g, "fat_saturated_g": nutrients.fat_saturated_g, "potassium_mg": nutrients.potassium_mg, "cholesterol_mg": nutrients.cholesterol_mg,"carbohydrates_total_g": nutrients.carbohydrates_total_g}
                                 meallist.append(mealent)
                         return make_response({'mealentries': meallist}, 200)
@@ -1282,11 +1294,11 @@ def recordSymptoms(pid):
             content = request.get_json()
             notes = content['notes']
             date_and_time = content['date_and_time']
-            date_and_time = datetime.strptime(date_and_time, "%m/%d/%Y %H:%M").date()
+            date_and_time = datetime.strptime(date_and_time, "%m/%d/%Y %I:%M %p").date()
             patient= Patients.query.filter_by(pid=pid).first()
             if patient.name == current_user.name or current_user in patient.caregivers: 
                 if content['category'] == "mood":
-                    symptom_name = content['severity']+"Mood"
+                    symptom_name = "Mood: " + content['severity']
                     if content['severity'].lower() == "depressed":
                         severity = 5
                         symptomType = SymptomType.MOOD
@@ -1317,7 +1329,7 @@ def recordSymptoms(pid):
                         symptom=Symptom(symptom_name, symptomType,severity,date_and_time,notes, pid, HealthRecord.query.filter_by(patient_id=pid).first().hrid )
                         db.session.add(symptom)
                         db.session.commit()
-                elif content['category'] == "sleep":
+                elif content['category'].lower() == "sleep":
                     symptom_name = content['severity'] +"Sleep"
                     if content['severity'].lower() == "terrible":
                         severity = 5
@@ -1349,7 +1361,7 @@ def recordSymptoms(pid):
                         symptom=Symptom(symptom_name, symptomType,severity,date_and_time,notes, pid, HealthRecord.query.filter_by(patient_id=pid).first().hrid )
                         db.session.add(symptom)
                         db.session.commit()
-                elif content['category'] == "appetite":
+                elif content['category'].lower() == "appetite":
                     symptom_name = content['severity'] +"Appetite"
                     if content['severity'].lower() == "none":
                         severity = 5
@@ -1381,18 +1393,18 @@ def recordSymptoms(pid):
                         symptom=Symptom(symptom_name, symptomType,severity,date_and_time,notes, pid, HealthRecord.query.filter_by(patient_id=pid).first().hrid )
                         db.session.add(symptom)
                         db.session.commit()
-                    elif content['category'].lower() == "other":
-                        symptom_name = content['symptom_name'].lower()
-                        severity = int(content['severity'])
-                        symptomType = SymptomType.OTHER
+                elif content['category'].lower() == "other":
+                    symptom_name = content['symptom_name'].lower()
+                    severity = int(content['severity'])
+                    symptomType = SymptomType.OTHER
                 #     symptoms = nlp(symptom_name) # handle this some other way b
                 #     vals = [{"text":i.text, "label": i.label} for i in symptoms.ent]
                 #     for j in vals: 
                 #         if j['label'] == "SYMPTOM":
                 #             symptom_name = j['text']
-                        symptom=Symptom(symptom_name, symptomType,severity,date_and_time,notes, pid, HealthRecord.query.filter_by(patient_id=pid).first().hrid )
-                        db.session.add(symptom)
-                        db.session.commit()
+                    symptom=Symptom(symptom_name, symptomType,severity,date_and_time,notes, pid, HealthRecord.query.filter_by(patient_id=pid).first().hrid )
+                    db.session.add(symptom)
+                    db.session.commit()
                 
                 return make_response({'success': 'Symptom has been created successfully'},200)
             return make_response({'error': 'User is not authorised to edit this meal entry.'},400)
@@ -1401,7 +1413,7 @@ def recordSymptoms(pid):
             print(e)
             return make_response({'error': 'An error has occurred.'},400)  
 
-@app.route("/deleteSymptom/<sid>", methods=['GET','DELETE'])
+@app.route("/deleteSymptom/<pid>/<sid>", methods=['GET','DELETE'])
 @login_required
 @patient_or_caregiver_required
 def deleteSymptom(sid):
