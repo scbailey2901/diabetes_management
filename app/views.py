@@ -421,7 +421,7 @@ def scheduleAlert(alrt):
                 print("Not yet")
 
 
-@app.route("/createMedicationReminder/<pid>", methods=['POST'])
+@app.route("/createMedicationReminder/<pid>", methods=['POST']) #creates a medication
 @login_required
 @patient_or_caregiver_required
 def createMedicationReminder(pid):
@@ -983,7 +983,7 @@ def getDailyLunchEntries(pid):
             print(e)
             return make_response({'error': 'An error has occurred.'},400)
         
-@app.route("/getDailySnacKEntries/<pid>", methods = ['GET'])
+@app.route("/getDailySnackEntries/<pid>", methods = ['GET'])
 @login_required
 @patient_or_caregiver_required
 def getDailySnackEntries(pid):    
@@ -1416,22 +1416,30 @@ def recordSymptoms(pid):
 @app.route("/deleteSymptom/<pid>/<sid>", methods=['GET','DELETE'])
 @login_required
 @patient_or_caregiver_required
-def deleteSymptom(sid):
+def deleteSymptom(pid,sid):
     try:
         if request.method == "DELETE":
             symptom = Symptom.query.filter_by(sid=sid).first()
-            if symptom != None:
-                hr=HealthRecord.query.filter_by(hrid = symptom.hrid) 
-                db.session.delete(symptom)
-                for i in hr.symptoms:
-                    if i.sid == sid:
-                        db.session.delete(i)
-                db.session.commit()
-                if Medication.query.filter_by(sid=sid).first() == None:
-                    return make_response({'success': 'The symptom has been deleted successfully.'},400)
-                else:
-                    return make_response({'error': 'An error occurred during the attempt to delete this symptom.'},400)
-            return make_response({'error': 'Symptom was not found.'},404)
+            patient = Patients.query.filter_by(pid=pid).first()
+            if patient.name == current_user.name or current_user in patient.caregivers:
+                if symptom != None:
+                    # hr=HealthRecord.query.filter_by(hrid = patient.hrid) 
+                    db.session.delete(symptom)
+                    db.session.commit()
+                    if Symptom.query.filter_by(sid=sid).first() == None:
+                        return make_response({'success': 'The symptom has been deleted successfully.'},200)
+                        # print(hr.symptoms)
+                    else:
+                        return make_response({'error': 'An error occurred during the attempt to delete this symptom.'},400)
+            else:
+                return make_response({'error': 'User is not authorized to delete this medication reminder.'},400)
+
+            # hr=HealthRecord.query.filter_by(hrid = symptom.hrid)    
+            # for i in hr.symptoms:
+            #     print(i)
+            #     if i.sid == sid:
+            #         hr.symptoms.remove(i)
+            #         db.session.commit()
     except Exception as e: 
             db.session.rollback()
             print(e)
@@ -1445,45 +1453,45 @@ def searchCaregiver(pid):
         try:
             content = request.get_json()
             search = content['search']
-            if Caregivers.query.filter_by(name = search).all() != None:
-                caregiver = Caregivers.query.filter(name = search).first()
-                caregiver = {"caregiver_id" : caregiver.cid, "name": caregiver.name, "username":caregiver.username,"type": caregiver.type.value}
-                return make_response({"caregiver":caregiver})
-            elif Caregivers.query.filter_by(username = search).first():
-                caregiver = Caregivers.query.filter_by(username = search).first()
-                caregiver = {"caregiver_id" : caregiver.cid, "name": caregiver.name, "username":caregiver.username,"type": caregiver.type.value}
-                return make_response({"caregiver" : caregiver})
-            elif Patients.query.filter_by(username = search).first() or Patients.query.filter_by(name = search).first():
-                return make_response({'error': 'User is not a registered Caregiver.'},400)
-            else: 
-                return make_response({'error': 'Caregiver was not found'},404)
+            patient = Patients.query.filter_by(pid=pid).first()
+            if patient.name == current_user.name or current_user in patient.caregivers:
+                if Caregivers.query.filter_by(name = search).all() != None:
+                    caregiver = Caregivers.query.filter_by(name = search).first()
+                    caregiver = {"caregiver_id" : caregiver.cid, "name": caregiver.name, "username":caregiver.username,"type": caregiver.type.value}
+                    return make_response({"caregiver":caregiver})
+                elif Caregivers.query.filter_by(username = search).first():
+                    caregiver = Caregivers.query.filter_by(username = search).first()
+                    caregiver = {"caregiver_id" : caregiver.cid, "name": caregiver.name, "username":caregiver.username,"type": caregiver.type.value}
+                    return make_response({"caregiver" : caregiver})
+                elif Patients.query.filter_by(username = search).first() or Patients.query.filter_by(name = search).first():
+                    return make_response({'error': 'User is not a registered Caregiver.'},400)
+                else: 
+                    return make_response({'error': 'Caregiver was not found'},404)
         except Exception as e: 
             db.session.rollback()
             print(e)
             return make_response({'error': 'An error has occurred.'},400)    
 
-@app.route("/addCaregiver/<pid>", methods=['POST'])
+@app.route("/addCaregiver/<pid>/<cid>", methods=['POST'])
 @login_required
 @patient_or_caregiver_required
-def addCaregiver(pid):
+def addCaregiver(pid,cid):
     if request.method =="POST":
         try:
             content = request.get_json()
-            cid = content['cid']
-            if Caregivers.query.filter_by(cid = cid).first() != None:
-                caregiver = Caregivers.query.filter_by(cid = cid).first()
-            elif Patients.query.filter_by(cid = cid).first() or Patients.query.filter_by(cid = cid).first():
-                return make_response({'error': 'User is not a registered Caregiver.'},400)
-            else: 
-                return make_response({'error': 'Caregiver was not found'},404)
-            
-            if ((current_user.name) == (Patients.query.filter_by(pid = pid).first().name)) or current_user in Patients.query.filter_by(pid = pid).first().caregivers:
-                Patients.query.filter_by(pid = pid).first().caregivers.append(caregiver)
-                db.session.commit()
-                return make_response({'success': 'Caregiver was added successfully.'})
+            patient = Patients.query.filter_by(pid=pid).first()
+            if patient.name == current_user.name or current_user in patient.caregivers:
+                if Caregivers.query.filter_by(cid = cid).first() != None:
+                    caregiver = Caregivers.query.filter_by(cid = cid).first()
+                    patient.caregivers.append(caregiver)
+                    db.session.commit()
+                    return make_response({'success': 'Caregiver was added successfully.'},200)
+                elif Patients.query.filter_by(cid = cid).first() or Patients.query.filter_by(cid = cid).first():
+                    return make_response({'error': 'User is not a registered Caregiver.'},400)
+                else: 
+                    return make_response({'error': 'Caregiver was not found'},404)
             else:
-                return make_response({'error': 'User is not authorized to add a caregiver for '+ Patients.query.filter_by(pid = pid).first().name },400)
-            
+                    return make_response({'error': 'User is not authorized to add a caregiver for '+ patient.name },400)
         except Exception as e: 
             db.session.rollback()
             print(e)

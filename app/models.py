@@ -478,7 +478,7 @@ class Nutrients(db.Model):
         self.meid = meid
         
 class Symptom(db.Model):
-    __tablename__ = "tablename"
+    __tablename__ = "symptom"
     sid = db.Column(db.Integer, primary_key=True, autoincrement=True)
     severity = db.Column(db.Integer)
     date_and_time = db.Column(db.DateTime)
