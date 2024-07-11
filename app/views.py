@@ -151,17 +151,24 @@ def login():
             content = request.get_json()
             email = content['email']
             password = content['password']
-            patient = Patients.query.filter_by(email = email).first()
-            if patient and check_password_hash(patient.password, password):
-                login_user(patient)
-                return jsonify({"success": "User logged in successfully."}),200
+            if email != None and password != None:
+                patient = Patients.query.filter_by(email = email).first()
+                if patient and check_password_hash(patient.password, password):
+                    login_user(patient)
+                    return jsonify({"success": "User logged in successfully."}),200
+                    
+                caregiver = Caregivers.query.filter_by(email = email).first()
+                if caregiver and check_password_hash(caregiver.password, password):
+                    login_user(caregiver)
+                    return jsonify({"success": "User logged in successfully."}),200
                 
-            caregiver = Caregivers.query.filter_by(email = email).first()
-            if caregiver and check_password_hash(caregiver.password, password):
-                login_user(caregiver)
-                return jsonify({"success": "User logged in successfully."}),200
-            
-            return jsonify({'error': 'Login failed. Please check your credentials to ensure they are correct.'}),400
+                return jsonify({'error': 'Login failed. Please check your credentials to ensure they are correct.'}),400
+            elif email == None and password != None:
+                return jsonify({"error": "Please enter the email address associated with your account."}),400
+            elif email != None and password == None:
+                return jsonify({"error": "Please enter the password associated with your account."}),400
+            elif email == None and password == None:
+                return jsonify({"error": "Please enter your email address and password in order to to login."}),400  
         except Exception as e:
             db.session.rollback()
             print(e)
