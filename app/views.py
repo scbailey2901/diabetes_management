@@ -161,8 +161,7 @@ def login():
                 if caregiver and check_password_hash(caregiver.password, password):
                     login_user(caregiver)
                     return jsonify({"success": "User logged in successfully."}),200
-                
-                return jsonify({'error': 'Login failed. Please check your credentials to ensure they are correct.'}),400
+                return jsonify({'error': 'Please check your credentials to ensure they are correct.'}),400
             elif email == None and password != None:
                 return jsonify({"error": "Please enter the email address associated with your account."}),400
             elif email != None and password == None:
@@ -213,7 +212,10 @@ def register():
             pregex = r"^\+1\([0-9]{3}\)[0-9]{3}-[0-9]{4}$"
             validphone = re.search(pregex, content['phonenumber'])
             if validphone: 
-                phonenumber = content['phonenumber']
+                if Patients.query.filter_by(phonenumber=content['phonenumber']).all() ==[]:
+                    phonenumber = content['phonenumber']
+                else:
+                    return jsonify({'error': 'This phone number is already associated with an account.'}),400
             else: 
                 db.session.rollback()
                 return jsonify({'error': 'Please enter a valid phone number'}),400
@@ -245,11 +247,14 @@ def register():
                     diabetesType= DiabetesType.TYPEONE if content['diabetesType'].lower() == "type one" else DiabetesType.TYPETWO
                     # bloodSugarlevels = []
                     # bloodPressurelevels = []
-                    patient = Patients(age,dob,email,consentForData, name, username, password,phonenumber, gender)
-                    db.session.add(patient)
-                    db.session.commit()
-                    patient= Patients.query.filter_by(name=name).first()
-                    
+                    if age and dob and email and consentForData and name and username and password and phonenumber and gender:
+                        patient = Patients(age,dob,email,consentForData, name, username, password,phonenumber, gender)
+                        db.session.add(patient)
+                        db.session.commit()
+                        patient= Patients.query.filter_by(name=name).first()
+                    else:
+                        return jsonify({'error': 'Please enter all your credentials in order to'}),400
+                        
                     healthrecord = HealthRecord(age, weight,weightUnits, height, heightUnits, diabetesType,isSmoker, isDrinker, hasHighBP, hasHighChol, hasHeartDisease, hadHeartAttack, hadStroke, hasTroubleWalking, [], [], patient.get_id())
                     db.session.add(healthrecord)
                     db.session.commit()
