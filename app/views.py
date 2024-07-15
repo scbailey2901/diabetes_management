@@ -1560,23 +1560,20 @@ def addCaregiver(pid,cid):
             print(e)
             return make_response({'error': 'An error has occurred.'},400)
 
-@app.route("/removeCaregiver/<cid>", methods=['DELETE'])
+@app.route("/removeCaregiver/<pid>/<cid>", methods=['DELETE'])
 @login_required
 @patient_or_caregiver_required
-def removeCaregiver(cid):
+def removeCaregiver(pid,cid):
     if request.method =="DELETE":
         try:
             caregiver = Caregivers.query.filter_by(cid = cid).first()
             if caregiver != None:
-                patient = Patients.query.filter_by(name = current_user.name).first()
+                patient = Patients.query.filter_by(pid=pid).first()
                 if  patient != None and caregiver in patient.caregivers:
                     patient.caregivers.remove(caregiver)
                     db.session.commit()
                     caregiver = Caregivers.query.filter_by(cid = cid).first()
-                    if caregiver != None and caregiver not in patient.caregivers:
-                        return make_response({"success": "Caregiver has been removed successfully"})
-                    else: 
-                        return make_response({'error': 'An error has occurred during the attempt to remove the caregiver.'},400)
+                    return make_response({"success": "Caregiver has been removed successfully"})
                 return make_response({'error': 'You are not authorised to remmove the caregiver.'},400)
             return make_response({'error': 'Caregiver not found'},404)    
         except Exception as e: 
@@ -1584,6 +1581,160 @@ def removeCaregiver(cid):
             print(e)
             return make_response({'error': 'An error has occurred.'},400) 
         
+
+
+@app.route("/dailyNutritionalReport/<pid>/<month>/<day>/<year>", methods=['GET'])
+@login_required
+@patient_or_caregiver_required
+def dailyNutritionalReport(pid, month, day, year):
+    try:
+        date_str = f"{month}/{day}/{year}"
+        report_date = datetime.strptime(date_str, '%m/%d/%Y').date()
+        patient = Patients.query.filter_by(pid=pid).first()
+        if not patient:
+            return make_response({'error': 'Patient not found'}, 404)
+
+        meal_entries = MealEntry.query.filter_by(pid=pid, date_and_time=report_date).all()
+        if not meal_entries:
+            return make_response({'error': 'No meal entries found for this date'}, 404)
+
+        report = []
+        total_nutrients = {
+            "sugar_in_g": 0,
+            "protein_in_g": 0,
+            "sodium_in_mg": 0,
+            "calories": 0,
+            "fat_total_g": 0,
+            "fat_saturated_g": 0,
+            "potassium_mg": 0,
+            "cholesterol_mg": 0,
+            "carbohydrates_total_g": 0
+        }
+
+        for meal in meal_entries:
+            nutrients = Nutrients.query.filter_by(meid=meal.meid).all()
+            nutrients_list = [{
+                "nutrients_id": nutrient.nid,
+                "sugar_in_g": nutrient.sugar_in_g,
+                "protein_in_g": nutrient.protein_in_g,
+                "sodium_in_mg": nutrient.sodium_in_mg,
+                "calories": nutrient.calories,
+                "fat_total_g": nutrient.fat_total_g,
+                "fat_saturated_g": nutrient.fat_saturated_g,
+                "potassium_mg": nutrient.potassium_mg,
+                "cholesterol_mg": nutrient.cholesterol_mg,
+                "carbohydrates_total_g": nutrient.carbohydrates_total_g
+            } for nutrient in nutrients]
+
+            for nutrient in nutrients:
+                total_nutrients["sugar_in_g"] += nutrient.sugar_in_g
+                total_nutrients["protein_in_g"] += nutrient.protein_in_g
+                total_nutrients["sodium_in_mg"] += nutrient.sodium_in_mg
+                total_nutrients["calories"] += nutrient.calories
+                total_nutrients["fat_total_g"] += nutrient.fat_total_g
+                total_nutrients["fat_saturated_g"] += nutrient.fat_saturated_g
+                total_nutrients["potassium_mg"] += nutrient.potassium_mg
+                total_nutrients["cholesterol_mg"] += nutrient.cholesterol_mg
+                total_nutrients["carbohydrates_total_g"] += nutrient.carbohydrates_total_g
+
+            meal_entry = {
+                "portiontype": meal.portiontype,
+                "servingSize": meal.servingSize,
+                "date_and_time": meal.date_and_time.strftime('%Y-%m-%d %H:%M:%S'),
+                "mealtype": meal.mealtype.name,
+                "mealOrDrink": meal.mealOrDrink.name,
+                "meal": meal.meal,
+                "patient_id": meal.pid,
+                "nutrients": nutrients_list
+            }
+            report.append(meal_entry)
+
+        return jsonify({"report": report, "total_nutrients": total_nutrients}), 200
+    except Exception as e:
+        print(e)
+        return make_response({'error': 'An error has occurred.'}, 500)
+
+@app.route("/weeklyNutritionalReport/<pid>/<start_month>/<start_day>/<start_year>", methods=['GET'])
+@login_required
+@patient_or_caregiver_required
+def weeklyNutritionalReport(pid, start_month, start_day, start_year):
+    try:
+        start_date_str = f"{start_month}/{start_day}/{start_year}"
+        start_date = datetime.strptime(start_date_str, '%m/%d/%Y').date()
+        
+        # Calculate end date (7 days from start date)
+        end_date = start_date + timedelta(days=6)
+
+        patient = Patients.query.filter_by(pid=pid).first()
+        if not patient:
+            return make_response({'error': 'Patient not found'}, 404)
+
+        # Query meal entries within the date range
+        meal_entries = MealEntry.query.filter(
+            MealEntry.pid == pid,
+            MealEntry.date_and_time >= start_date,
+            MealEntry.date_and_time <= end_date
+        ).all()
+
+        if not meal_entries:
+            return make_response({'error': 'No meal entries found for this week'}, 404)
+
+        report = []
+        total_nutrients = {
+            "sugar_in_g": 0,
+            "protein_in_g": 0,
+            "sodium_in_mg": 0,
+            "calories": 0,
+            "fat_total_g": 0,
+            "fat_saturated_g": 0,
+            "potassium_mg": 0,
+            "cholesterol_mg": 0,
+            "carbohydrates_total_g": 0
+        }
+
+        for meal in meal_entries:
+            nutrients = Nutrients.query.filter_by(meid=meal.meid).all()
+            nutrients_list = [{
+                "nutrients_id": nutrient.nid,
+                "sugar_in_g": nutrient.sugar_in_g,
+                "protein_in_g": nutrient.protein_in_g,
+                "sodium_in_mg": nutrient.sodium_in_mg,
+                "calories": nutrient.calories,
+                "fat_total_g": nutrient.fat_total_g,
+                "fat_saturated_g": nutrient.fat_saturated_g,
+                "potassium_mg": nutrient.potassium_mg,
+                "cholesterol_mg": nutrient.cholesterol_mg,
+                "carbohydrates_total_g": nutrient.carbohydrates_total_g
+            } for nutrient in nutrients]
+
+            for nutrient in nutrients:
+                total_nutrients["sugar_in_g"] += nutrient.sugar_in_g
+                total_nutrients["protein_in_g"] += nutrient.protein_in_g
+                total_nutrients["sodium_in_mg"] += nutrient.sodium_in_mg
+                total_nutrients["calories"] += nutrient.calories
+                total_nutrients["fat_total_g"] += nutrient.fat_total_g
+                total_nutrients["fat_saturated_g"] += nutrient.fat_saturated_g
+                total_nutrients["potassium_mg"] += nutrient.potassium_mg
+                total_nutrients["cholesterol_mg"] += nutrient.cholesterol_mg
+                total_nutrients["carbohydrates_total_g"] += nutrient.carbohydrates_total_g
+
+            meal_entry = {
+                "portiontype": meal.portiontype,
+                "servingSize": meal.servingSize,
+                "date_and_time": meal.date_and_time.strftime('%Y-%m-%d %H:%M:%S'),
+                "mealtype": meal.mealtype.name,
+                "mealOrDrink": meal.mealOrDrink.name,
+                "meal": meal.meal,
+                "patient_id": meal.pid,
+                "nutrients": nutrients_list
+            }
+            report.append(meal_entry)
+
+        return jsonify({"report": report, "total_nutrients": total_nutrients}), 200
+
+    except Exception as e:
+        print(e)
+        return make_response({'error': 'An error has occurred.'}, 500)
 
 # @app.route('/generateReports/<pid>', methods=['GET'])
 # @login_required

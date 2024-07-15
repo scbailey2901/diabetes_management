@@ -7,7 +7,8 @@ import time
 patient_caregiver = db.Table(
     'patient_caregiver',
     db.Column('patient_id', db.Integer, db.ForeignKey('patients.pid')),
-    db.Column('caregiver_id', db.Integer, db.ForeignKey('caregivers.cid'), nullable=True)
+    db.Column('caregiver_id', db.Integer, db.ForeignKey('caregivers.cid'), nullable=True),
+    db.UniqueConstraint('patient_id', 'caregiver_id', name='uix_patient_caregiver')
 )
 
 class CaregiverType(Enum):

@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Daily Nutritional Report</title>
+    <style>
+        body { font-family: Arial, sans-serif; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { border: 1px solid #000; padding: 8px; text-align: left; }
+        th { background-color: #f2f2f2; }
+    </style>
+</head>
+<body>
+    <h1>Daily Nutritional Report for {{ date }}</h1>
+    <h2>Patient: {{ patient.name }}</h2>
+    <h3>Date: {{ date }}</h3>
+    <table>
+        <tr>
+            <th>Meal</th>
+            <th>Type</th>
+            <th>Portion Type</th>
+            <th>Serving Size</th>
+            <th>Calories</th>
+            <th>Protein (g)</th>
+            <th>Carbohydrates (g)</th>
+            <th>Fat (g)</th>
+            <th>Sugar (g)</th>
+            <th>Sodium (mg)</th>
+            <th>Potassium (mg)</th>
+            <th>Cholesterol (mg)</th>
+        </tr>
+        {% for meal in report %}
+        <tr>
+            <td>{{ meal.meal }}</td>
+            <td>{{ meal.mealtype }}</td>
+            <td>{{ meal.portiontype }}</td>
+            <td>{{ meal.servingSize }}</td>
+            <td>{{ meal.nutrients.calories }}</td>
+            <td>{{ meal.nutrients.protein_in_g }}</td>
+            <td>{{ meal.nutrients.carbohydrates_total_g }}</td>
+            <td>{{ meal.nutrients.fat_total_g }}</td>
+            <td>{{ meal.nutrients.sugar_in_g }}</td>
+            <td>{{ meal.nutrients.sodium_in_mg }}</td>
+            <td>{{ meal.nutrients.potassium_mg }}</td>
+            <td>{{ meal.nutrients.cholesterol_mg }}</td>
+        </tr>
+        {% endfor %}
+    </table>
+    <h2>Total Nutrients for the Day</h2>
+    <ul>
+        <li>Calories: {{ total_nutrients.calories }}</li>
+        <li>Protein: {{ total_nutrients.protein_in_g }} g</li>
+        <li>Carbohydrates: {{ total_nutrients.carbohydrates_total_g }} g</li>
+        <li>Fat: {{ total_nutrients.fat_total_g }} g</li>
+        <li>Sugar: {{ total_nutrients.sugar_in_g }} g</li>
+        <li>Sodium: {{ total_nutrients.sodium_in_mg }} mg</li>
+        <li>Potassium: {{ total_nutrients.potassium_mg }} mg</li>
+        <li>Cholesterol: {{ total_nutrients.cholesterol_mg }} mg</li>
+    </ul>
+</body>
+</html>
