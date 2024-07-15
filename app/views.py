@@ -819,17 +819,38 @@ def getMealEntries(pid):
         try:
             if request.method =="GET":
                 patient= Patients.query.filter_by(pid=pid).first()
-                mealDiary = MealDiary.query.filter_by(pid=pid).first()
-                print(mealDiary.allMeals)
-                if patient != None and mealDiary != None:
-                    if mealDiary.allMeals != None:
-                        meallist=[]
-                        for meal in mealDiary.allMeals:
-                            nutrients = Nutrients.query.filter_by(meid=meal.meid).all()
-                            for i in nutrients:
-                                mealent = {"portiontype": meal.portiontype, "servingSize": meal.servingSize, "date_and_time":meal.date_and_time, "mealtype": meal.mealtype, "mealOrDrink": meal.mealOrDrink, "meal": meal.meal, "patient_id": meal.pid,"nutrients_id":i.nid,"sugar_in_g":i.sugar_in_g,"protein_in_g": i.protein_in_g, "sodium_in_mg": i.sodium_in_mg, "calories":i.calories, "fat_total_g": i.fat_total_g, "fat_saturated_g": i.fat_saturated_g, "potassium_mg": i.potassium_mg, "cholesterol_mg": i.cholesterol_mg,"carbohydrates_total_g": i.carbohydrates_total_g}
+                mealDiary = MealEntry.query.filter_by(pid=pid).all()
+                if patient is not None and mealDiary is not None:
+                    meallist=[]
+                    for meal in mealDiary:
+                        if meal.mealtype == None:
+                            mealtype = "None"
+                        elif meal.mealtype == MealType.BEVERAGE:
+                            mealtype = "beverage"
+                        elif meal.mealtype == MealType.BREAKFAST:
+                            mealtype = "breakfast"
+                        elif meal.mealtype == MealType.LUNCH:
+                            mealtype = "lunch"
+                        elif meal.mealtype == MealType.BRUNCH:
+                            mealtype = "brunch"
+                        elif meal.mealtype == MealType.SNACK :
+                            mealtype = "snack"
+                        elif meal.mealtype == MealType.DESSERT :
+                            mealtype = "dessert"
+                        
+                        if meal.mealOrDrink == None:
+                            mealOrDrink ="None"
+                        elif meal.mealOrDrink == FoodOrDrink.Food:
+                            mealOrDrink = "Food"
+                        elif meal.mealOrDrink == FoodOrDrink.DRINK:
+                            mealOrDrink = "Drink"
+                        else:
+                            mealOrDrink = "Food and Drink"
+                        nutrients = Nutrients.query.filter_by(meid=meal.meid).all()
+                        for i in nutrients:
+                            mealent = {"portiontype": meal.portiontype, "servingSize": meal.servingSize, "date_and_time":meal.date_and_time, "mealtype": mealtype, "mealOrDrink": mealOrDrink, "meal": meal.meal, "patient_id": meal.pid,"nutrients_id":i.nid,"sugar_in_g":i.sugar_in_g,"protein_in_g": i.protein_in_g, "sodium_in_mg": i.sodium_in_mg, "calories":i.calories, "fat_total_g": i.fat_total_g, "fat_saturated_g": i.fat_saturated_g, "potassium_mg": i.potassium_mg, "cholesterol_mg": i.cholesterol_mg,"carbohydrates_total_g": i.carbohydrates_total_g}
                             meallist.append(mealent)
-                        return make_response({'mealentries': meallist}, 200)
+                    return make_response({'mealentries': meallist}, 200)
                 elif patient == None:
                     return make_response({'error': 'Patient does not exist'},400)
                 elif mealDiary == None:
@@ -839,6 +860,36 @@ def getMealEntries(pid):
             print(e)
             return make_response({'error': 'An error has occurred.'},400)    
         
+def convertMealType(meal):
+    if meal.mealtype == None:
+        mealtype = "None"
+    elif meal.mealtype == MealType.BEVERAGE:
+        mealtype = "beverage"
+    elif meal.mealtype == MealType.BREAKFAST:
+        mealtype = "breakfast"
+    elif meal.mealtype == MealType.LUNCH:
+        mealtype = "lunch"
+    elif meal.mealtype == MealType.BRUNCH:
+        mealtype = "brunch"
+    elif meal.mealtype == MealType.SNACK :
+        mealtype = "snack"
+    elif meal.mealtype == MealType.DESSERT :
+        mealtype = "dessert"
+    
+    return mealtype
+
+def convertMealOrDrink(meal):                       
+    if meal.mealOrDrink == None:
+        mealOrDrink ="None"
+    elif meal.mealOrDrink == FoodOrDrink.Food:
+        mealOrDrink = "Food"
+    elif meal.mealOrDrink == FoodOrDrink.DRINK:
+        mealOrDrink = "Drink"
+    else:
+        mealOrDrink = "Food and Drink"   
+    
+    return mealOrDrink
+           
 @app.route("/getWeeklyMealEntries/<pid>", methods = ['GET'])
 @login_required
 @patient_or_caregiver_required
@@ -847,18 +898,18 @@ def getWeeklyMealEntries(pid):
         try:
             if request.method =="GET":
                 patient= Patients.query.filter_by(pid=pid).first()
-                mealDiary = MealDiary.query.filter_by(pid=pid).first()
-                if patient != None and mealDiary != None:
-                    if mealDiary.allMeals != None:
-                        meallist=[]
-                        start = date.today() - timedelta(days=today.weekday())
-                        end = start + timedelta(days=6)
-                        for meal in mealDiary.allMeals:
-                            if (start <= meal.date_and_time.date()) and (meal.date_and_time.date() <= end):
-                                nutrients = Nutrients.query.filter_by(nid=meal.nutrients_id).first()
-                                mealent = {"portiontype": meal.portiontype, "servingSize": meal.servingSize, "date_and_time":meal.date_and_time, "mealtype": meal.mealtype, "mealOrDrink": meal.mealOrDrink, "meal": meal.meal, "patient_id": meal.pid,"nutrients_id":meal.nutrients_id,"sugar_in_g":nutrients.sugar_in_g,"protein_in_g": nutrients.protein_in_g, "sodium_in_mg": nutrients.sodium_in_mg, "calories":nutrients.calories, "fat_total_g": nutrients.fat_total_g, "fat_saturated_g": nutrients.fat_saturated_g, "potassium_mg": nutrients.potassium_mg, "cholesterol_mg": nutrients.cholesterol_mg,"carbohydrates_total_g": nutrients.carbohydrates_total_g}
+                mealDiary = MealEntry.query.filter_by(pid=pid).all()
+                if patient is not None and mealDiary is not None:
+                    meallist=[]
+                    start = date.today() - timedelta(days=date.today().weekday())
+                    end = start + timedelta(days=6)
+                    for meal in mealDiary:
+                        if (start <= meal.date_and_time.date()) and (meal.date_and_time.date() <= end):
+                            nutrients = Nutrients.query.filter_by(meid=meal.meid).all()
+                            for i in nutrients:
+                                mealent = {"portiontype": meal.portiontype, "servingSize": meal.servingSize, "date_and_time":meal.date_and_time, "mealtype": convertMealType(meal), "mealOrDrink": convertMealOrDrink(meal), "meal": meal.meal, "patient_id": meal.pid,"nutrients_id":i.nid,"sugar_in_g":i.sugar_in_g,"protein_in_g": i.protein_in_g, "sodium_in_mg": i.sodium_in_mg, "calories":i.calories, "fat_total_g": i.fat_total_g, "fat_saturated_g": i.fat_saturated_g, "potassium_mg": i.potassium_mg, "cholesterol_mg": i.cholesterol_mg,"carbohydrates_total_g": i.carbohydrates_total_g}
                                 meallist.append(mealent)
-                        return make_response({'mealentries': meallist}, 200)
+                    return make_response({'mealentries': meallist}, 200)
                 elif patient == None:
                     return make_response({'error': 'Patient does not exist'},400)
                 elif mealDiary == None:
